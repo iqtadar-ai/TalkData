@@ -226,8 +226,7 @@
         </div>
         <div class="col-md-6 mt-3 mt-md-0">
             <!-- Upload Form -->
-            <form id="uploadForm" method="post" enctype="multipart/form-data" class="d-flex justify-content-md-end align-items-center gap-2">
-                {% csrf_token %}
+            <form id="uploadForm" action="/" method="post" enctype="multipart/form-data" class="d-flex justify-content-md-end align-items-center gap-2">                {% csrf_token %}
                 <input type="file" name="dataset" class="form-control form-control-file form-control-sm w-auto" required>
                 <button type="submit" id="uploadBtn" class="btn btn-sm btn-primary px-3 fw-medium d-flex align-items-center">
                     Upload Data
@@ -376,7 +375,7 @@
     <div class="row mt-2 mb-5">
         <div class="col-12">
             <!-- Command Form -->
-            <form id="commandForm" method="post" class="mx-auto" style="max-width: 850px;">
+           <form id="commandForm" action="/" method="post" class="mx-auto" style="max-width: 850px;">
                 {% csrf_token %}
                 <div class="command-box p-3">
                     <textarea
