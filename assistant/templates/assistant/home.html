@@ -1,0 +1,455 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TalkData AI</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <style>
+        /* New Slate & Violet Color Palette */
+        :root {
+            --bg-main: #0f172a;       /* Slate 900 */
+            --bg-card: #1e293b;       /* Slate 800 */
+            --bg-input: #334155;      /* Slate 700 */
+            --border-color: #334155;  /* Slate 700 */
+            --border-light: #475569;  /* Slate 600 */
+            --text-main: #f8fafc;     /* Slate 50 */
+            --text-muted: #94a3b8;    /* Slate 400 */
+            --accent-primary: #8b5cf6; /* Violet 500 */
+            --accent-hover: #7c3aed;   /* Violet 600 */
+            --success-color: #10b981;  /* Emerald 500 */
+        }
+
+        body {
+            background-color: var(--bg-main);
+            color: var(--text-main);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            min-height: 100vh;
+        }
+
+        /* Smooth UI Elements */
+        .card {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+        }
+        
+        .stat-card.gradient {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, var(--bg-card) 100%);
+            border-color: rgba(139, 92, 246, 0.3);
+        }
+
+        h1, h2, h3, h4, h5 {
+            color: var(--text-main);
+            font-weight: 600;
+            letter-spacing: -0.025em;
+        }
+        
+        .text-muted-custom {
+            color: var(--text-muted) !important;
+        }
+
+        /* Form Inputs */
+        .form-control-file {
+            background-color: var(--bg-input);
+            color: var(--text-main);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+        }
+        
+        .command-box {
+            background-color: var(--bg-input);
+            border: 1px solid var(--border-light);
+            border-radius: 16px;
+            transition: all 0.3s ease;
+            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
+        }
+
+        .command-box:focus-within {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15), 0 10px 25px -5px rgba(0,0,0,0.3);
+            background-color: #1e293b;
+        }
+
+        .command-input {
+            background: transparent;
+            border: none;
+            color: var(--text-main);
+            resize: none;
+            box-shadow: none !important;
+            font-size: 1.05rem;
+            line-height: 1.6;
+        }
+        
+        .command-input::placeholder {
+            color: var(--text-muted);
+            opacity: 0.7;
+        }
+
+        .command-input:focus {
+            background: transparent;
+            color: var(--text-main);
+        }
+
+        /* Table Styling */
+        .table-dark-custom {
+            color: var(--text-main);
+            margin-bottom: 0;
+            font-size: 0.9rem;
+        }
+        
+        .table-dark-custom th {
+            background-color: rgba(15, 23, 42, 0.6);
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border-light);
+            font-weight: 600;
+            padding: 12px 16px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            font-size: 0.75rem;
+            white-space: nowrap;
+        }
+        
+        .table-dark-custom td {
+            background-color: transparent;
+            border-bottom: 1px solid var(--border-color);
+            color: #cbd5e1;
+            padding: 12px 16px;
+            white-space: nowrap;
+        }
+
+        /* Buttons */
+        .btn-primary {
+            background-color: var(--accent-primary);
+            border-color: var(--accent-primary);
+            color: white;
+            font-weight: 500;
+        }
+
+        .btn-primary:hover, .btn-primary:active {
+            background-color: var(--accent-hover) !important;
+            border-color: var(--accent-hover) !important;
+        }
+
+        .btn-ai {
+            background-color: var(--text-main);
+            color: var(--bg-main);
+            font-weight: 600;
+            border-radius: 8px;
+            transition: all 0.2s;
+        }
+        
+        .btn-ai:hover {
+            opacity: 0.9;
+            transform: translateY(-1px);
+        }
+
+        .btn-ai:disabled {
+            opacity: 0.7;
+            transform: none;
+            cursor: not-allowed;
+        }
+
+        .btn-outline-secondary {
+            border-color: var(--border-color);
+            color: var(--text-muted);
+        }
+
+        .btn-outline-secondary:hover {
+            background-color: var(--bg-input);
+            color: var(--text-main);
+            border-color: var(--border-light);
+        }
+        
+        /* Badges & Visuals */
+        .badge-ai {
+            background-color: rgba(139, 92, 246, 0.15);
+            color: #a78bfa;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .plot-placeholder {
+            min-height: 350px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 2px dashed var(--border-light);
+            border-radius: 12px;
+            color: var(--text-muted);
+            background: rgba(15, 23, 42, 0.4);
+        }
+
+        /* Custom Scrollbar for tables */
+        .table-responsive::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        .table-responsive::-webkit-scrollbar-track {
+            background: var(--bg-card); 
+        }
+        .table-responsive::-webkit-scrollbar-thumb {
+            background: var(--border-light); 
+            border-radius: 4px;
+        }
+        .table-responsive::-webkit-scrollbar-thumb:hover {
+            background: var(--text-muted); 
+        }
+
+        .chart-container { 
+            width: 100%; 
+            min-height: 420px;
+         } 
+        .plotly-graph-div  { 
+            width: 100% !important; }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid px-4 py-4 max-w-7xl mx-auto" style="max-width: 1400px;">
+    
+    <!-- Header & Upload Section -->
+    <div class="row mb-4 align-items-center">
+        <div class="col-md-6">
+            <div class="d-flex align-items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                    <line x1="18" y1="20" x2="18" y2="10"></line>
+                    <line x1="12" y1="20" x2="12" y2="4"></line>
+                    <line x1="6" y1="20" x2="6" y2="14"></line>
+                </svg>
+                <div>
+                    <h2 class="mb-0 fs-4">TalkData AI</h2>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6 mt-3 mt-md-0">
+            <!-- Upload Form -->
+            <form id="uploadForm" method="post" enctype="multipart/form-data" class="d-flex justify-content-md-end align-items-center gap-2">
+                {% csrf_token %}
+                <input type="file" name="dataset" class="form-control form-control-file form-control-sm w-auto" required>
+                <button type="submit" id="uploadBtn" class="btn btn-sm btn-primary px-3 fw-medium d-flex align-items-center">
+                    Upload Data
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Explanation Card -->
+    {% if friendly_message %}
+    <div class="card mb-4 border-0 shadow-sm" style="background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid var(--border-light) !important;">
+        <div class="card-body p-4">
+            <div class="d-flex align-items-center mb-3">
+                <span class="me-2 fs-5">✨</span>
+                <h6 class="mb-0 text-white">AI Explanation</h6>
+            </div>
+            <div class="text-light" style="white-space: pre-line; line-height: 1.7;">
+                {{ friendly_message }}
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <!-- Alerts/Messages -->
+    {% if message %}
+    <div class="alert bg-transparent border shadow-sm mb-4 rounded-3 d-flex align-items-center" style="border-color: var(--success-color); color: var(--success-color);"> 
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="me-2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        {{ message }}
+    </div>
+    {% endif %} 
+    
+    {% if error %} 
+    <div class="alert bg-transparent border shadow-sm mb-4 rounded-3 d-flex align-items-center" style="border-color: #ef4444; color: #ef4444;"> 
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="me-2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
+        {{ error }}
+    </div>
+    {% endif %}
+
+  {% if raw_ai_response %} 
+  <details class="mt-3">
+     <summary class="text-muted-custom">Raw AI response</summary> 
+     <pre class="mt-2 small text-light">{{ raw_ai_response }}</pre> 
+    </details> 
+{% endif %}
+  <!-- Top Stats Row -->
+    <div class="row g-4 mb-4"> 
+        <div class="col-md-6">
+            <div class="card stat-card gradient h-100 p-4">
+                <div class="text-muted-custom small text-uppercase fw-semibold mb-1">Total Rows</div> 
+                <div class="display-6 fw-bold text-white">{{ shape.0|default:"-" }}</div> 
+            </div>
+        </div>
+        
+        <div class="col-md-6">
+            <div class="card h-100 p-4">
+                <div class="text-muted-custom small text-uppercase fw-semibold mb-1">Total Columns</div> 
+                <!-- Added text-white to the line below -->
+                <div class="display-6 fw-bold text-white">{{ shape.1|default:"-" }}</div>
+            </div>
+        </div> 
+    </div>
+    <!-- Analysis Cards -->
+    {% for card in analysis_cards %}
+    <div class="card mb-4">
+        <div class="card-header bg-transparent border-bottom-0 pt-4 pb-2 px-4">
+            <h5 class="mb-0 text-white">{{ card.title }}</h5>
+        </div>
+        <div class="card-body px-4 pb-4">
+            {% for item in card.items %}
+                <div class="d-flex justify-content-between align-items-center py-2 {% if not forloop.last %}border-bottom{% endif %}" style="border-color: var(--border-color) !important;">
+                    <span class="text-light">{{ item.label }}</span>
+                    <span class="badge rounded-pill bg-light text-dark px-3 py-1 fw-semibold">{{ item.value }}</span>
+                </div>
+            {% endfor %}
+
+            {% if card.insight %}
+                <div class="mt-4 p-3 rounded-3" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2);">
+                    <div class="fw-semibold mb-1" style="color: var(--success-color);">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="me-1 mb-1"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+                        Quick Insight
+                    </div>
+                    <div class="text-light small" style="line-height:1.6;">
+                        {{ card.insight }}
+                    </div>
+                </div>
+            {% endif %}
+        </div>
+    </div>
+    {% endfor %}
+
+    <!-- Main Content: Preview & Plots -->
+    <div class="row g-4 mb-5">
+        <!-- Table Preview (Left) -->
+        <div class="col-lg-7">
+            <div class="card h-100">
+                <div class="card-header bg-transparent border-bottom-0 pt-3 pb-3 px-4 d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3"> 
+                    <h5 class="mb-0">Data Preview</h5>
+                    <div class="d-flex gap-2 flex-wrap"> 
+                        <a href="?view=preview" class="btn btn-sm {% if preview_mode == 'preview' %}btn-primary{% else %}btn-outline-secondary{% endif %}">Preview</a> 
+                        <a href="?view=all_columns" class="btn btn-sm {% if preview_mode == 'all_columns' %}btn-primary{% else %}btn-outline-secondary{% endif %}">All Columns</a> 
+                        <a href="?view=all_rows" class="btn btn-sm {% if preview_mode == 'all_rows' %}btn-primary{% else %}btn-outline-secondary{% endif %}">More Rows</a> 
+                        <a href="?view=full" class="btn btn-sm {% if preview_mode == 'full' %}btn-primary{% else %}btn-outline-secondary{% endif %}">Expanded</a> 
+                    </div>
+                </div>
+                <div class="card-body p-0 border-top" style="border-color: var(--border-color) !important;">
+                    <div class="table-responsive" style="max-height: 500px;">
+                        <div class="table-dark-custom">
+                            {{ preview|safe }}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+<!-- Plot Space (Right) -->
+        <div class="col-lg-5">
+             <div class="card h-100">
+                 <div class="card-header bg-transparent border-bottom-0 pt-4 pb-2 px-4">
+                     <h5 class="mb-0">Visualization</h5>
+                 </div>
+                 <div class="card-body px-4 pb-4"> 
+                    
+                    {% for chart in charts %}
+                        <div class="chart-container mb-4"> 
+                            <!-- DEBUG TRICK: This will print all the available keys on the screen -->
+                            {% comment %} <div class="alert alert-warning text-dark">
+                                <strong>Debug - Available Keys:</strong> {{ chart.keys }}
+                            </div>
+                             {% endcomment %}
+                            <!-- Try both common names just in case! -->
+                            {{ chart.chart_html|safe }} 
+                            
+                        </div>
+                    {% empty %} 
+                        <div class="plot-placeholder">
+                             <div class="text-center">
+                                 <p class="mb-0 text-muted">Ask the AI to generate a plot to see it here.</p> 
+                             </div>
+                         </div>
+                    {% endfor %} 
+                    
+                </div>
+             </div>
+        </div>
+    <!-- AI Command Box -->
+    <div class="row mt-2 mb-5">
+        <div class="col-12">
+            <!-- Command Form -->
+            <form id="commandForm" method="post" class="mx-auto" style="max-width: 850px;">
+                {% csrf_token %}
+                <div class="command-box p-3">
+                    <textarea
+                        name="command"
+                        rows="3"
+                        class="form-control command-input"
+                        placeholder="Try: 'Remove the salary column', 'Create a profit column', or 'Show missing values'"
+                        required
+                    ></textarea>
+                    
+                    <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top" style="border-color: var(--border-light) !important;">
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="badge badge-ai py-2 px-3 fw-medium">✨ Powered by AI Agents</span>
+                        </div>
+                        <button type="submit" id="executeBtn" class="btn btn-ai px-4 py-2 d-flex align-items-center gap-2">
+                            <span>Execute Command</span>
+                            <svg id="executeIcon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+</div>
+
+<!-- Loading Spinner Script -->
+ <script>
+    document.addEventListener("DOMContentLoaded", function() {
+        
+        // Handle AI Command Submission
+        const commandForm = document.getElementById("commandForm");
+        if(commandForm) {
+            commandForm.addEventListener("submit", function() {
+                const btn = document.getElementById("executeBtn");
+                const input = document.querySelector(".command-input");
+                
+                // 1. Disable the input so it doesn't vanish/glitch
+                btn.disabled = true;
+                input.readOnly = true;
+                
+                // 2. Change button to spinner
+                btn.innerHTML = `
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Processing...
+                `;
+
+                // 3. Inject a large spinner directly into the Visualization Card
+                const vizCard = document.querySelector(".col-lg-5 .card-body");
+                if(vizCard) {
+                    vizCard.innerHTML = `
+                        <div class="d-flex flex-column justify-content-center align-items-center h-100" style="min-height: 350px;">
+                            <div class="spinner-border mb-3" style="width: 3rem; height: 3rem; color: var(--accent-primary);" role="status">
+                                <span class="visually-hidden">Loading...</span>
+                            </div>
+                            <h6 class="text-muted">AI is generating your visualization...</h6>
+                        </div>
+                    `;
+                }
+            });
+        }
+
+        // Handle File Upload Submission
+        const uploadForm = document.getElementById("uploadForm");
+        if(uploadForm) {
+            uploadForm.addEventListener("submit", function() {
+                const btn = document.getElementById("uploadBtn");
+                btn.disabled = true;
+                btn.innerHTML = `
+                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+                    Uploading...
+                `;
+            });
+        }
+    });
+</script>
