@@ -7,448 +7,524 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
     <style>
-        /* New Slate & Violet Color Palette */
         :root {
-            --bg-main: #0f172a;       /* Slate 900 */
-            --bg-card: #1e293b;       /* Slate 800 */
-            --bg-input: #334155;      /* Slate 700 */
-            --border-color: #334155;  /* Slate 700 */
-            --border-light: #475569;  /* Slate 600 */
-            --text-main: #f8fafc;     /* Slate 50 */
-            --text-muted: #94a3b8;    /* Slate 400 */
-            --accent-primary: #8b5cf6; /* Violet 500 */
-            --accent-hover: #7c3aed;   /* Violet 600 */
-            --success-color: #10b981;  /* Emerald 500 */
+            --bg-base: #090d16;        /* Deep background */
+            --bg-surface: #0f172a;     /* Workspace panels */
+            --bg-card: #1e293b;        /* Elevated elements */
+            --bg-hover: #273549;
+            --border-subtle: #1e293b;
+            --border-muted: #334155;
+            --text-main: #f8fafc;
+            --text-muted: #94a3b8;
+            --text-dim: #64748b;
+            --accent-primary: #7c3aed; /* Refined violet */
+            --accent-glow: rgba(124, 58, 237, 0.15);
+            --success-color: #10b981;
         }
+
+        * { box-sizing: border-box; }
 
         body {
-            background-color: var(--bg-main);
+            background-color: var(--bg-base);
             color: var(--text-main);
-            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-            min-height: 100vh;
+            font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, sans-serif;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            margin: 0;
         }
 
-        /* Smooth UI Elements */
-        .card {
+        /* --- Top Header Navigation --- */
+        .workspace-header {
+            background-color: var(--bg-surface);
+            border-bottom: 1px solid var(--border-muted);
+            padding: 0.65rem 1.25rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 56px;
+        }
+
+        .meta-pill {
             background-color: var(--bg-card);
-            border: 1px solid var(--border-color);
-            border-radius: 16px;
-            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            border: 1px solid var(--border-muted);
+            border-radius: 6px;
+            padding: 3px 10px;
+            font-size: 0.78rem;
+            color: var(--text-muted);
         }
-        
-        .stat-card.gradient {
-            background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, var(--bg-card) 100%);
-            border-color: rgba(139, 92, 246, 0.3);
-        }
+        .meta-pill strong { color: var(--text-main); }
 
-        h1, h2, h3, h4, h5 {
+        .btn-ghost {
+            background: transparent;
+            border: 1px solid var(--border-muted);
+            color: var(--text-muted);
+            padding: 5px 10px;
+            border-radius: 6px;
+            display: inline-flex;
+            align-items: center;
+            transition: all 0.15s ease;
+        }
+        .btn-ghost:hover:not(:disabled) {
+            background: var(--bg-card);
             color: var(--text-main);
-            font-weight: 600;
-            letter-spacing: -0.025em;
+            border-color: var(--text-muted);
         }
-        
-        .text-muted-custom {
-            color: var(--text-muted) !important;
+        .btn-ghost:disabled { opacity: 0.35; cursor: not-allowed; }
+
+        /* --- Main Layout: Data (Left 70%) | Copilot (Right 30%) --- */
+        .workspace-body {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
         }
 
-        /* Form Inputs */
-        .form-control-file {
-            background-color: var(--bg-input);
-            color: var(--text-main);
-            border: 1px solid var(--border-color);
-            border-radius: 8px;
-        }
-        
-        .command-box {
-            background-color: var(--bg-input);
-            border: 1px solid var(--border-light);
-            border-radius: 16px;
-            transition: all 0.3s ease;
-            box-shadow: 0 10px 25px -5px rgba(0,0,0,0.3);
+        .canvas-pane {
+            flex: 1;
+            background-color: var(--bg-base);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
 
-        .command-box:focus-within {
-            border-color: var(--accent-primary);
-            box-shadow: 0 0 0 4px rgba(139, 92, 246, 0.15), 0 10px 25px -5px rgba(0,0,0,0.3);
-            background-color: #1e293b;
+        .chat-pane {
+            width: 380px;
+            background-color: var(--bg-surface);
+            border-left: 1px solid var(--border-muted);
+            display: flex;
+            flex-direction: column;
         }
 
-        .command-input {
+        /* --- Canvas Toolbar & Tabs --- */
+        .canvas-toolbar {
+            background-color: var(--bg-surface);
+            border-bottom: 1px solid var(--border-muted);
+            padding: 0 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 48px;
+        }
+
+        .tab-btn {
             background: transparent;
             border: none;
-            color: var(--text-main);
-            resize: none;
-            box-shadow: none !important;
-            font-size: 1.05rem;
-            line-height: 1.6;
-        }
-        
-        .command-input::placeholder {
             color: var(--text-muted);
-            opacity: 0.7;
-        }
-
-        .command-input:focus {
-            background: transparent;
-            color: var(--text-main);
-        }
-
-        /* Table Styling */
-        .table-dark-custom {
-            color: var(--text-main);
-            margin-bottom: 0;
-            font-size: 0.9rem;
-        }
-        
-        .table-dark-custom th {
-            background-color: rgba(15, 23, 42, 0.6);
-            color: var(--text-muted);
-            border-bottom: 1px solid var(--border-light);
-            font-weight: 600;
-            padding: 12px 16px;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            font-size: 0.75rem;
-            white-space: nowrap;
-        }
-        
-        .table-dark-custom td {
-            background-color: transparent;
-            border-bottom: 1px solid var(--border-color);
-            color: #cbd5e1;
-            padding: 12px 16px;
-            white-space: nowrap;
-        }
-
-        /* Buttons */
-        .btn-primary {
-            background-color: var(--accent-primary);
-            border-color: var(--accent-primary);
-            color: white;
+            padding: 0 1rem;
+            height: 48px;
+            font-size: 0.85rem;
             font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            border-bottom: 2px solid transparent;
+            cursor: pointer;
+            transition: color 0.15s;
         }
+        .tab-btn svg { stroke: var(--text-muted); transition: stroke 0.15s; }
+        .tab-btn:hover { color: var(--text-main); }
+        .tab-btn.active {
+            color: var(--text-main);
+            border-bottom-color: var(--accent-primary);
+        }
+        .tab-btn.active svg { stroke: var(--accent-primary); }
 
-        .btn-primary:hover, .btn-primary:active {
-            background-color: var(--accent-hover) !important;
-            border-color: var(--accent-hover) !important;
-        }
-
-        .btn-ai {
-            background-color: var(--text-main);
-            color: var(--bg-main);
-            font-weight: 600;
-            border-radius: 8px;
-            transition: all 0.2s;
-        }
-        
-        .btn-ai:hover {
-            opacity: 0.9;
-            transform: translateY(-1px);
-        }
-
-        .btn-ai:disabled {
-            opacity: 0.7;
-            transform: none;
-            cursor: not-allowed;
-        }
-
-        .btn-outline-secondary {
-            border-color: var(--border-color);
+        .view-pill-group .btn {
+            font-size: 0.75rem;
+            padding: 2px 8px;
+            border-color: var(--border-muted);
             color: var(--text-muted);
         }
-
-        .btn-outline-secondary:hover {
-            background-color: var(--bg-input);
+        .view-pill-group .btn.active, .view-pill-group .btn:hover {
+            background-color: var(--bg-card);
             color: var(--text-main);
-            border-color: var(--border-light);
-        }
-        
-        /* Badges & Visuals */
-        .badge-ai {
-            background-color: rgba(139, 92, 246, 0.15);
-            color: #a78bfa;
-            border: 1px solid rgba(139, 92, 246, 0.3);
         }
 
-        .plot-placeholder {
-            min-height: 350px;
+       /* --- Canvas Viewports & Table Updates --- */
+        .canvas-content {
+            flex: 1;
+            overflow: auto;
+            padding: 1.25rem;
+        }
+
+        .table-container {
+            border: 1px solid var(--border-muted);
+            border-radius: 8px;
+            background-color: var(--bg-surface);
+            overflow-y: auto;
+            max-height: calc(100vh - 180px); /* Enables sticky headers */
+        }
+
+        .table-dark-custom {
+            margin: 0;
+            width: 100%;
+            /* 'separate' fixes the white gap above sticky headers */
+            border-collapse: separate; 
+            border-spacing: 0;
+            font-size: 0.9rem; /* Increased for better readability */
+        }
+
+        .table-dark-custom th {
+            background-color: #0b1120 !important; /* Force dark header */
+            color: var(--text-muted) !important;
+            font-weight: 600;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            padding: 12px 14px;
+            border-bottom: 1px solid var(--border-muted);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            white-space: nowrap;
+        }
+
+        .table-dark-custom td, .table-dark-custom th.row_heading {
+            background-color: var(--bg-surface) !important; /* Forces dark background to override Bootstrap */
+            color: #cbd5e1 !important; /* Forces light text */
+            padding: 11px 14px;
+            border-bottom: 1px solid var(--border-subtle);
+            white-space: nowrap;
+        }
+
+        /* Re-add the stripe effect for readability on large rows */
+        .table-striped tbody tr:nth-of-type(odd) td,
+        .table-striped tbody tr:nth-of-type(odd) th {
+            background-color: rgba(255, 255, 255, 0.02) !important; 
+        }
+
+        .table-dark-custom tr:hover td {
+            background-color: rgba(255, 255, 255, 0.06) !important;
+        }
+
+        /* Fix the white "Choose File" button */
+        input[type=file]::file-selector-button {
+            background-color: var(--bg-card);
+            color: var(--text-main);
+            border: none;
+            border-right: 1px solid var(--border-muted);
+            padding: 0.25rem 0.75rem;
+            margin-right: 0.75rem;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        input[type=file]::file-selector-button:hover {
+            background-color: var(--border-muted);
+        }
+        /* --- Chat Sidebar Pane --- */
+        .chat-header {
+            padding: 0.75rem 1rem;
+            border-bottom: 1px solid var(--border-muted);
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-muted);
             display: flex;
             align-items: center;
-            justify-content: center;
-            border: 2px dashed var(--border-light);
-            border-radius: 12px;
-            color: var(--text-muted);
-            background: rgba(15, 23, 42, 0.4);
+            justify-content: space-between;
         }
 
-        /* Custom Scrollbar for tables */
-        .table-responsive::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
-        }
-        .table-responsive::-webkit-scrollbar-track {
-            background: var(--bg-card); 
-        }
-        .table-responsive::-webkit-scrollbar-thumb {
-            background: var(--border-light); 
-            border-radius: 4px;
-        }
-        .table-responsive::-webkit-scrollbar-thumb:hover {
-            background: var(--text-muted); 
+        .chat-history {
+            flex: 1;
+            overflow-y: auto;
+            padding: 1rem;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
         }
 
-        .chart-container { 
-            width: 100%; 
-            min-height: 420px;
-         } 
-        .plotly-graph-div  { 
-            width: 100% !important; }
+        .msg-bubble {
+            background-color: var(--bg-card);
+            border: 1px solid var(--border-muted);
+            border-radius: 10px;
+            padding: 0.85rem;
+            font-size: 0.85rem;
+        }
+
+        .badge-timer {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--success-color);
+            border: 1px solid rgba(16, 185, 129, 0.25);
+            font-size: 0.7rem;
+            font-family: monospace;
+            padding: 2px 7px;
+            border-radius: 999px;
+        }
+
+        .chat-input-wrapper {
+            padding: 0.85rem 1rem;
+            background-color: var(--bg-surface);
+            border-top: 1px solid var(--border-muted);
+        }
+
+        .cmd-textarea {
+            background-color: var(--bg-base);
+            border: 1px solid var(--border-muted);
+            color: var(--text-main);
+            border-radius: 8px;
+            resize: none;
+            font-size: 0.85rem;
+            padding: 9px 12px;
+            width: 100%;
+            outline: none;
+        }
+        .cmd-textarea:focus {
+            border-color: var(--accent-primary);
+            box-shadow: 0 0 0 2px var(--accent-glow);
+        }
+
+        .btn-run {
+            background: var(--accent-primary);
+            color: #ffffff;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.82rem;
+            font-weight: 500;
+            padding: 7px 12px;
+            transition: opacity 0.15s ease;
+        }
+        .btn-run:hover { opacity: 0.9; }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-muted); border-radius: 3px; }
     </style>
 </head>
 <body>
 
-<div class="container-fluid px-4 py-4 max-w-7xl mx-auto" style="max-width: 1400px;">
-    
-    <!-- Header & Upload Section -->
-    <div class="row mb-4 align-items-center">
-        <div class="col-md-6">
-            <div class="d-flex align-items-center gap-2">
-                <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--accent-primary)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
-                    <line x1="18" y1="20" x2="18" y2="10"></line>
-                    <line x1="12" y1="20" x2="12" y2="4"></line>
-                    <line x1="6" y1="20" x2="6" y2="14"></line>
-                </svg>
-                <div>
-                    <h2 class="mb-0 fs-4">TalkData AI</h2>
-                </div>
-            </div>
+<!-- TOP HEADER -->
+<header class="workspace-header">
+    <div class="d-flex align-items-center gap-3">
+        <!-- Logo -->
+        <div class="d-flex align-items-center gap-2">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#a78bfa" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"></line>
+                <line x1="12" y1="20" x2="12" y2="4"></line>
+                <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+            <span class="fw-bold fs-6">TalkData</span>
         </div>
-        <div class="col-md-6 mt-3 mt-md-0">
-            <!-- Upload Form -->
-            <form id="uploadForm" action="/" method="post" enctype="multipart/form-data" class="d-flex justify-content-md-end align-items-center gap-2">                {% csrf_token %}
-                <input type="file" name="dataset" class="form-control form-control-file form-control-sm w-auto" required>
-                <button type="submit" id="uploadBtn" class="btn btn-sm btn-primary px-3 fw-medium d-flex align-items-center">
-                    Upload Data
+
+        {% if shape %}
+        <div class="d-flex align-items-center gap-2">
+            <span class="meta-pill">Rows: <strong>{{ shape.0 }}</strong></span>
+            <span class="meta-pill">Cols: <strong>{{ shape.1 }}</strong></span>
+        </div>
+        {% endif %}
+    </div>
+
+    <!-- Actions -->
+    <div class="d-flex align-items-center gap-2">
+        <button class="btn-ghost" id="undoBtn" disabled title="Undo transformation">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
+        </button>
+        <button class="btn-ghost" id="redoBtn" disabled title="Redo transformation">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg>
+        </button>
+
+        <form id="uploadForm" action="/" method="post" enctype="multipart/form-data" class="m-0 d-flex gap-2 ms-2">
+            {% csrf_token %}
+            <input type="file" name="dataset" class="form-control form-control-sm" style="background:var(--bg-card); border-color:var(--border-muted); color:white; font-size:0.75rem;" required>
+            <button type="submit" id="uploadBtn" class="btn btn-sm" style="background:var(--accent-primary); color:white; font-size:0.75rem; font-weight:500;">Upload</button>
+        </form>
+    </div>
+</header>
+
+<!-- MAIN BODY (Canvas on Left, Copilot on Right) -->
+<div class="workspace-body">
+
+    <!-- PRIMARY: DATA CANVAS (70%) -->
+    <main class="canvas-pane">
+        <!-- Canvas Tabs & View Controls -->
+        <div class="canvas-toolbar">
+            <div class="d-flex">
+                <button class="tab-btn active" onclick="switchTab('table')" id="tab-table">
+                    <!-- Clean SVG Table Icon -->
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18"/><path d="M9 21V9"/></svg>
+                    Table View
                 </button>
-            </form>
-        </div>
-    </div>
-
-    <!-- Explanation Card -->
-    {% if friendly_message %}
-    <div class="card mb-4 border-0 shadow-sm" style="background: linear-gradient(135deg, rgba(30, 41, 59, 0.8) 0%, rgba(15, 23, 42, 0.9) 100%); border: 1px solid var(--border-light) !important;">
-        <div class="card-body p-4">
-            <div class="d-flex align-items-center mb-3">
-                <span class="me-2 fs-5">✨</span>
-                <h6 class="mb-0 text-white">AI Explanation</h6>
+                <button class="tab-btn" onclick="switchTab('chart')" id="tab-chart">
+                    <!-- Clean SVG Chart Icon -->
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                    Visualization
+                </button>
             </div>
-            <div class="text-light" style="white-space: pre-line; line-height: 1.7;">
-                {{ friendly_message }}
+
+            <!-- View limit buttons for experienced data users -->
+            <div class="btn-group view-pill-group">
+                <a href="?view=preview" class="btn btn-sm {% if preview_mode == 'preview' or not preview_mode %}active{% endif %}">50 Rows</a>
+                <a href="?view=all_rows" class="btn btn-sm {% if preview_mode == 'all_rows' %}active{% endif %}">500 Rows</a>
+                <a href="?view=full" class="btn btn-sm {% if preview_mode == 'full' %}active{% endif %}">Full View</a>
             </div>
         </div>
-    </div>
-    {% endif %}
 
-    <!-- Alerts/Messages -->
-    {% if message %}
-    <div class="alert bg-transparent border shadow-sm mb-4 rounded-3 d-flex align-items-center" style="border-color: var(--success-color); color: var(--success-color);"> 
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="me-2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
-        {{ message }}
-    </div>
-    {% endif %} 
-    
-    {% if error %} 
-    <div class="alert bg-transparent border shadow-sm mb-4 rounded-3 d-flex align-items-center" style="border-color: #ef4444; color: #ef4444;"> 
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="me-2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>
-        {{ error }}
-    </div>
-    {% endif %}
-
-  {% if raw_ai_response %} 
-  <details class="mt-3">
-     <summary class="text-muted-custom">Raw AI response</summary> 
-     <pre class="mt-2 small text-light">{{ raw_ai_response }}</pre> 
-    </details> 
-{% endif %}
-  <!-- Top Stats Row -->
-    <div class="row g-4 mb-4"> 
-        <div class="col-md-6">
-            <div class="card stat-card gradient h-100 p-4">
-                <div class="text-muted-custom small text-uppercase fw-semibold mb-1">Total Rows</div> 
-                <div class="display-6 fw-bold text-white">{{ shape.0|default:"-" }}</div> 
-            </div>
-        </div>
-        
-        <div class="col-md-6">
-            <div class="card h-100 p-4">
-                <div class="text-muted-custom small text-uppercase fw-semibold mb-1">Total Columns</div> 
-                <!-- Added text-white to the line below -->
-                <div class="display-6 fw-bold text-white">{{ shape.1|default:"-" }}</div>
-            </div>
-        </div> 
-    </div>
-    <!-- Analysis Cards -->
-    {% for card in analysis_cards %}
-    <div class="card mb-4">
-        <div class="card-header bg-transparent border-bottom-0 pt-4 pb-2 px-4">
-            <h5 class="mb-0 text-white">{{ card.title }}</h5>
-        </div>
-        <div class="card-body px-4 pb-4">
-            {% for item in card.items %}
-                <div class="d-flex justify-content-between align-items-center py-2 {% if not forloop.last %}border-bottom{% endif %}" style="border-color: var(--border-color) !important;">
-                    <span class="text-light">{{ item.label }}</span>
-                    <span class="badge rounded-pill bg-light text-dark px-3 py-1 fw-semibold">{{ item.value }}</span>
-                </div>
-            {% endfor %}
-
-            {% if card.insight %}
-                <div class="mt-4 p-3 rounded-3" style="background: rgba(16, 185, 129, 0.1); border: 1px solid rgba(16, 185, 129, 0.2);">
-                    <div class="fw-semibold mb-1" style="color: var(--success-color);">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="me-1 mb-1"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
-                        Quick Insight
-                    </div>
-                    <div class="text-light small" style="line-height:1.6;">
-                        {{ card.insight }}
+        <!-- Canvas Viewports -->
+        <div class="canvas-content">
+            <!-- Table View -->
+            <div id="view-table" style="display: block;">
+                {% if preview %}
+                <div class="table-container">
+                    <div class="table-dark-custom">
+                        {{ preview|safe }}
                     </div>
                 </div>
+                {% else %}
+                <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style="min-height: 400px;">
+                    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--border-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                    <span>Upload a CSV or Parquet file to view the dataset</span>
+                </div>
+                {% endif %}
+            </div>
+
+            <!-- Visualization View -->
+            <div id="view-chart" style="display: none;">
+                {% for chart in charts %}
+                    <div class="mb-4 w-100">{{ chart.chart_html|safe }}</div>
+                {% empty %}
+                    <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style="min-height: 400px;">
+                        <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--border-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                        <span>Ask the AI to create a chart to view it here</span>
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+    </main>
+
+    <!-- SECONDARY: AI COPILOT DRAWER (30%) -->
+<!-- SECONDARY: AI COPILOT DRAWER (30%) -->
+    <aside class="chat-pane">
+        <div class="chat-header">
+            <span>COPILOT CHAT</span>
+            <span class="text-dim small">Qwen 2.5 Engine</span>
+        </div>
+
+        <div class="chat-history" id="chatFeed">
+            {% if not chat_history %}
+            <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--border-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="mb-2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span class="small">Ask anything about your data.</span>
+            </div>
             {% endif %}
-        </div>
-    </div>
-    {% endfor %}
 
-    <!-- Main Content: Preview & Plots -->
-    <div class="row g-4 mb-5">
-        <!-- Table Preview (Left) -->
-        <div class="col-lg-7">
-            <div class="card h-100">
-                <div class="card-header bg-transparent border-bottom-0 pt-3 pb-3 px-4 d-flex flex-column flex-md-row justify-content-between align-items-start align-items-md-center gap-3"> 
-                    <h5 class="mb-0">Data Preview</h5>
-                    <div class="d-flex gap-2 flex-wrap"> 
-                        <a href="?view=preview" class="btn btn-sm {% if preview_mode == 'preview' %}btn-primary{% else %}btn-outline-secondary{% endif %}">Preview</a> 
-                        <a href="?view=all_columns" class="btn btn-sm {% if preview_mode == 'all_columns' %}btn-primary{% else %}btn-outline-secondary{% endif %}">All Columns</a> 
-                        <a href="?view=all_rows" class="btn btn-sm {% if preview_mode == 'all_rows' %}btn-primary{% else %}btn-outline-secondary{% endif %}">More Rows</a> 
-                        <a href="?view=full" class="btn btn-sm {% if preview_mode == 'full' %}btn-primary{% else %}btn-outline-secondary{% endif %}">Expanded</a> 
+            {% for msg in chat_history %}
+                {% if msg.role == 'user' %}
+                <!-- User Message -->
+                <div class="d-flex justify-content-end mb-3">
+                    <div style="max-width: 85%;">
+                        <div class="p-2 px-3 text-white small shadow-sm" style="background-color: #2563eb; border-radius: 12px 12px 0px 12px;">
+                            {{ msg.text }}
+                        </div>
+                        <div class="text-end text-dim mt-1" style="font-size: 0.65rem;">{{ msg.time }}</div>
                     </div>
-                </div>
-                <div class="card-body p-0 border-top" style="border-color: var(--border-color) !important;">
-                    <div class="table-responsive" style="max-height: 500px;">
-                        <div class="table-dark-custom">
-                            {{ preview|safe }}
+                    <div class="ms-2 mt-1">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 24px; height: 24px; background: var(--bg-card); border: 1px solid var(--border-muted);">
+                            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-<!-- Plot Space (Right) -->
-        <div class="col-lg-5">
-             <div class="card h-100">
-                 <div class="card-header bg-transparent border-bottom-0 pt-4 pb-2 px-4">
-                     <h5 class="mb-0">Visualization</h5>
-                 </div>
-                 <div class="card-body px-4 pb-4"> 
-                    
-                    {% for chart in charts %}
-                        <div class="chart-container mb-4"> 
-                            <!-- DEBUG TRICK: This will print all the available keys on the screen -->
-                            {% comment %} <div class="alert alert-warning text-dark">
-                                <strong>Debug - Available Keys:</strong> {{ chart.keys }}
-                            </div>
-                             {% endcomment %}
-                            <!-- Try both common names just in case! -->
-                            {{ chart.chart_html|safe }} 
+                {% else %}
+                <!-- AI Message -->
+                <div class="d-flex justify-content-start mb-3">
+                    <div class="me-2 mt-1">
+                        <div class="rounded-circle d-flex align-items-center justify-content-center" style="width: 24px; height: 24px; background: var(--accent-primary);">
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2"><rect x="3" y="11" width="18" height="10" rx="2"/><circle cx="12" cy="5" r="2"/><path d="M12 7v4"/><line x1="8" y1="16" x2="8" y2="16"/><line x1="16" y1="16" x2="16" y2="16"/></svg>
+                        </div>
+                    </div>
+                    <div style="max-width: 85%;">
+                        <div class="msg-bubble shadow-sm p-3">
+                            <div class="text-light mb-2" style="white-space: pre-line; line-height: 1.5; font-size: 0.85rem;">{{ msg.text }}</div>
                             
+                            {% if msg.stats %}
+                            <!-- Action Stats Card (Matches the screenshot style) -->
+                            <div class="rounded p-2 mt-2" style="background-color: var(--bg-base); border: 1px solid var(--border-muted);">
+                                <div class="d-flex align-items-center gap-2 mb-2">
+                                    <svg width="14" height="14" viewBox="0 0 24 24" fill="var(--success-color)" stroke="var(--bg-base)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9 12l2 2 4-4"/></svg>
+                                    <span class="small fw-semibold" style="color: var(--success-color);">Operation completed</span>
+                                </div>
+                                
+                                {% for stat in msg.stats %}
+                                <div class="d-flex justify-content-between align-items-center py-1 border-top" style="border-color: var(--border-muted) !important;">
+                                    <span class="text-dim" style="font-size: 0.75rem;">{{ stat.label }}</span>
+                                    <span class="text-light" style="font-size: 0.75rem; font-family: monospace;">{{ stat.value }}</span>
+                                </div>
+                                {% endfor %}
+                            </div>
+                            {% endif %}
                         </div>
-                    {% empty %} 
-                        <div class="plot-placeholder">
-                             <div class="text-center">
-                                 <p class="mb-0 text-muted">Ask the AI to generate a plot to see it here.</p> 
-                             </div>
-                         </div>
-                    {% endfor %} 
-                    
-                </div>
-             </div>
-        </div>
-    <!-- AI Command Box -->
-    <div class="row mt-2 mb-5">
-        <div class="col-12">
-            <!-- Command Form -->
-           <form id="commandForm" action="/" method="post" class="mx-auto" style="max-width: 850px;">
-                {% csrf_token %}
-                <div class="command-box p-3">
-                    <textarea
-                        name="command"
-                        rows="3"
-                        class="form-control command-input"
-                        placeholder="Try: 'Remove the salary column', 'Create a profit column', or 'Show missing values'"
-                        required
-                    ></textarea>
-                    
-                    <div class="d-flex justify-content-between align-items-center mt-3 pt-3 border-top" style="border-color: var(--border-light) !important;">
-                        <div class="d-flex align-items-center gap-2">
-                            <span class="badge badge-ai py-2 px-3 fw-medium">✨ Powered by AI Agents</span>
-                        </div>
-                        <button type="submit" id="executeBtn" class="btn btn-ai px-4 py-2 d-flex align-items-center gap-2">
-                            <span>Execute Command</span>
-                            <svg id="executeIcon" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"></line><polygon points="22 2 15 22 11 13 2 9 22 2"></polygon></svg>
-                        </button>
+                        <div class="text-start text-dim mt-1" style="font-size: 0.65rem;">{{ msg.time }}</div>
                     </div>
+                </div>
+                {% endif %}
+            {% endfor %}
+            
+            <!-- Anchors scroll to bottom -->
+            <div id="chat-bottom"></div>
+        </div>
+
+        <!-- Input Area -->
+        <div class="chat-input-wrapper">
+            <!-- (Keep your existing form here) -->
+            <form id="commandForm" action="/" method="post" class="m-0">
+                {% csrf_token %}
+                <textarea name="command" rows="2" class="cmd-textarea mb-2" placeholder="Describe a transformation..." required></textarea>
+                <div class="d-flex justify-content-end">
+                    <button type="submit" id="executeBtn" class="btn-run d-flex align-items-center gap-1">
+                        <span>Execute</span>
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                    </button>
                 </div>
             </form>
         </div>
-    </div>
+    </aside>
 
 </div>
 
-<!-- Loading Spinner Script -->
- <script>
-    document.addEventListener("DOMContentLoaded", function() {
+
+    <script>
+    // Tab Switcher
+    function switchTab(viewName) {
+        document.getElementById('view-table').style.display = viewName === 'table' ? 'block' : 'none';
+        document.getElementById('view-chart').style.display = viewName === 'chart' ? 'block' : 'none';
         
-        // Handle AI Command Submission
-        const commandForm = document.getElementById("commandForm");
-        if(commandForm) {
-            commandForm.addEventListener("submit", function() {
-                const btn = document.getElementById("executeBtn");
-                const input = document.querySelector(".command-input");
-                
-                // 1. Disable the input so it doesn't vanish/glitch
-                btn.disabled = true;
-                input.readOnly = true;
-                
-                // 2. Change button to spinner
-                btn.innerHTML = `
-                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    Processing...
-                `;
+        document.getElementById('tab-table').classList.toggle('active', viewName === 'table');
+        document.getElementById('tab-chart').classList.toggle('active', viewName === 'chart');
+    }
 
-                // 3. Inject a large spinner directly into the Visualization Card
-                const vizCard = document.querySelector(".col-lg-5 .card-body");
-                if(vizCard) {
-                    vizCard.innerHTML = `
-                        <div class="d-flex flex-column justify-content-center align-items-center h-100" style="min-height: 350px;">
-                            <div class="spinner-border mb-3" style="width: 3rem; height: 3rem; color: var(--accent-primary);" role="status">
-                                <span class="visually-hidden">Loading...</span>
-                            </div>
-                            <h6 class="text-muted">AI is generating your visualization...</h6>
-                        </div>
-                    `;
-                }
-            });
-        }
+    {% if charts %}
+        switchTab('chart');
+    {% endif %}
 
-        // Handle File Upload Submission
-        const uploadForm = document.getElementById("uploadForm");
-        if(uploadForm) {
-            uploadForm.addEventListener("submit", function() {
-                const btn = document.getElementById("uploadBtn");
-                btn.disabled = true;
-                btn.innerHTML = `
-                    <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
-                    Uploading...
-                `;
-            });
+    // Chat Execution Animation
+    document.getElementById("commandForm")?.addEventListener("submit", function() {
+        const btn = document.getElementById("executeBtn");
+        btn.disabled = true;
+        btn.innerHTML = `<span class="spinner-border spinner-border-sm me-1"></span> Running...`;
+    });
+
+    // File Upload Animation (Replaces canvas with a loading state)
+    document.getElementById("uploadForm")?.addEventListener("submit", function() {
+        const btn = document.getElementById("uploadBtn");
+        btn.disabled = true;
+        btn.innerHTML = `Uploading...`;
+
+        const canvasContent = document.querySelector(".canvas-content");
+        if (canvasContent) {
+            canvasContent.innerHTML = `
+                <div class="d-flex flex-column align-items-center justify-content-center h-100 text-muted" style="min-height: 400px;">
+                    <div class="spinner-border text-primary mb-3" style="width: 3rem; height: 3rem;" role="status"></div>
+                    <span class="fs-5">Uploading and parsing dataset...</span>
+                    <span class="small text-dim mt-2">Large files may take a moment</span>
+                </div>
+            `;
         }
     });
+
+    // Auto-scroll chat to the bottom
+    const chatFeed = document.getElementById('chatFeed');
+    if (chatFeed) {
+        chatFeed.scrollTop = chatFeed.scrollHeight;
+    }
 </script>
+
+</body>
+</html>

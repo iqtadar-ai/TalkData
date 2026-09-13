@@ -1,7 +1,10 @@
 import os
 import uuid
+from django.template import context
+from httpx import request
 import pandas as pd
 import json
+import time
 
 
 from django.shortcuts import render
@@ -80,7 +83,6 @@ def load_internal_dataframe(path):
 
 # ---------- Main view ----------
 
- 
 def home(request):
     context = {}
  
@@ -90,112 +92,160 @@ def home(request):
         request.session.pop('dataset_path', None)
         internal_path = None
         context['error'] = 'Your previous dataset expired or was removed from the server. Please re-upload.'
- 
+
+    # Ensure chat_history exists in session
+    if 'chat_history' not in request.session:
+        request.session['chat_history'] = []
+    
+    chat_history = request.session['chat_history']
+
+
+
+
     # ---------- Handle command form ----------
     if request.method == 'POST' and request.POST.get('command'):
         command = request.POST.get('command')
- 
+        
+        # Add user message to history
+        current_time = time.strftime("%I:%M %p")
+        chat_history.append({"role": "user", "text": command, "time": current_time})
+
         if internal_path:
             df = load_internal_dataframe(internal_path)
+            
+            # Snapshots for diffing stats
+            old_shape = df.shape
+            old_cols = set(df.columns)
+            
             ai_call_failed = False
             dataset_changed = False
- 
+            ai_text = "I've processed your request."
+            stats = []
+
             try:
+                start_time = time.perf_counter()
                 response = get_tool_calls(command, df.columns.tolist())
                 
                 if not response: 
-                    message = 'The AI assistant did not return a valid response.'
+                    ai_text = 'The AI assistant did not return a valid response.'
                     ai_call_failed = True
- 
-            except AIServiceUnavailable:
-                message = ("The AI assistant is a bit busy right now — please try "
-                           "again in a moment. Nothing in your dataset was changed.")
+
+            except AIServiceUnavailable as e:
+                ai_text = f"AI Service Unavailable: {str(e)}"
                 ai_call_failed = True
- 
             except Exception as e:
-                message = f"AI error: {type(e).__name__}: {str(e)}"
+                ai_text = f"AI error: {str(e)}"
                 ai_call_failed = True
- 
+
             if not ai_call_failed:
                 cleaned = response.replace('```json', '').replace('```', '').strip()
- 
+
                 try:
                     tool_calls = json.loads(cleaned)
- 
-                    if isinstance(tool_calls, dict):
-                        tool_calls = [tool_calls]
- 
-                    executed = []
-                    errors = []
-                    analysis_cards = []
-                    context.setdefault('charts', [])
-                    context.setdefault('analysis_cards', [])
                     
-                    for call in tool_calls:
-                        try:
-                            tool_name = call['tool']
-                            args = call.get('args', {})
- 
-                            if tool_name not in TOOLS:
-                                errors.append(f'Tool {tool_name} is not allowed')
-                                continue
- 
-                            tool = TOOLS[tool_name]
-                            result = tool(df, **args)
- 
-                            if TOOL_TYPES[tool_name] == 'transform':
-                                df = result
-                                dataset_changed = True
-                                executed.append(f'{tool_name} {args}')
-                            else:
-                                analysis_cards.append(result)
-                                executed.append(f'{tool_name} completed')
- 
-                        except KeyError as e:
-                            errors.append(f'Malformed tool call, missing key: {e}')
-                            
-                        except Exception as e:
-                            errors.append(f'{call.get("tool", "unknown")}: {str(e)}')
+                    # Guardrail: Catch if the AI refused to guess and returned an empty array
+                    if not tool_calls:
+                        ai_text = "I couldn't find that exact column in the dataset. Please check the spelling and try again."
+                        ai_call_failed = True
+                    
+                    if not ai_call_failed:
+                        if isinstance(tool_calls, dict):
+                            tool_calls = [tool_calls]
 
-                    charts = [c for c in analysis_cards if c.get('type') == 'chart']
-                    metric_cards = [c for c in analysis_cards if c.get('type') != 'chart']
-                    
-                    context['charts'] = charts
-                    context['analysis_cards'] = metric_cards
-                    
- 
-                    parts = []
-                    if executed:
-                        parts.append('Executed: ' + '; '.join(executed))
-                    if errors:
-                        parts.append('Errors: ' + '; '.join(errors))
-                    message = ' | '.join(parts) if parts else 'No changes made'
- 
-                    if analysis_cards:
-                        try:
-                            context['explanation'] = explain_results(command, analysis_cards)
+                        analysis_cards = []
+                        context.setdefault('charts', [])
+                        
+                        for call in tool_calls:
+                            # 1. Guardrail: Ensure the call itself is a valid dictionary
+                            if not isinstance(call, dict):
+                                raise ValueError("AI hallucinated the JSON structure. Expected a dictionary.")
+
+                            tool_name = call.get('tool')
+                            args = call.get('args', {})
+
+                            # 2. Guardrail: Catch if the AI returned a dict/list instead of a string for the tool name
+                            if not isinstance(tool_name, str):
+                                raise ValueError(f"AI schema error: 'tool' must be a text string, but it returned a {type(tool_name).__name__}. Try your prompt again.")
+
+                            # 3. Guardrail: The trap for hallucinated tool names
+                            if tool_name not in TOOLS:
+                                raise ValueError(f"AI hallucinated an unknown tool: '{tool_name}'")
+
+                            # If it passes all guardrails, execute the tool
+                            if tool_name in TOOLS:
+                                tool = TOOLS[tool_name]
+                                result = tool(df, **args)
+
+                                if TOOL_TYPES.get(tool_name) == 'transform':
+                                    df = result
+                                    dataset_changed = True
+                                else:
+                                    analysis_cards.append(result)
+                        # Stop timer
+                        end_time = time.perf_counter()
+                        exec_time = round(end_time - start_time, 2)
+
+                        # Build stats if dataset changed
+                        if dataset_changed:
+                            new_shape = df.shape
+                            new_cols = set(df.columns)
                             
-                        except AIServiceUnavailable:
-                            context['explanation'] = None
-                            message += " | (Explanation unavailable — AI assistant is busy)"
-                            
-                        except Exception:
-                            context['explanation'] = None
- 
-                except json.JSONDecodeError as e:
-                    message = f'Could not parse the AI response as JSON: {e}' 
-                    context['raw_ai_response'] = cleaned
-                    
+                            rows_diff = old_shape[0] - new_shape[0]
+                            if rows_diff > 0:
+                                stats.append({"label": "Rows removed", "value": rows_diff})
+                            elif rows_diff < 0:
+                                stats.append({"label": "Rows added", "value": abs(rows_diff)})
+                                
+                            added_cols = new_cols - old_cols
+                            if added_cols:
+                                stats.append({"label": "Columns added", "value": ", ".join(added_cols)})
+                                
+                            dropped_cols = old_cols - new_cols
+                            if dropped_cols:
+                                stats.append({"label": "Columns removed", "value": ", ".join(dropped_cols)})
+                                
+                            if not stats:
+                                stats.append({"label": "Action", "value": "Data transformed"})
+                                
+                            ai_text = f"I've updated the dataset based on your instructions."
+
+                        # Generate LLM explanation if there are analysis cards
+                        if analysis_cards:
+                            try:
+                                charts = [c for c in analysis_cards if c.get('type') == 'chart']
+                                context['charts'] = charts
+                                if charts:
+                                    ai_text = "I've generated the visualization for you. It's ready in the Visualization tab."
+                                else:
+                                    ai_text = explain_results(command, analysis_cards)
+                            except Exception:
+                                pass
+
+                        # Always add execution time to stats
+                        stats.append({"label": "Execution time", "value": f"{exec_time} seconds"})
+
+                except json.JSONDecodeError:
+                    ai_text = "Could not parse the AI response. Please try phrasing it differently."
                 except Exception as e:
-                    message = f'Error: {str(e)}'
- 
+                    ai_text = f"Error during execution: {str(e)}"
+
             if dataset_changed:
-                    df.to_parquet(internal_path)
-            context['message'] = message
- 
-        else:
-            context['error'] = 'No dataset found in session'
- 
+                df.to_parquet(internal_path)
+            
+            # Add AI response to history
+            chat_history.append({
+                "role": "ai", 
+                "text": ai_text, 
+                "stats": stats, 
+                "time": time.strftime("%I:%M %p")
+            })
+            
+            # Save session
+            request.session['chat_history'] = chat_history
+            request.session.modified = True
+            
+        context['chat_history'] = chat_history
+
     # ---------- Handle upload form ----------
     elif request.method == 'POST' and request.FILES.get('dataset'):
         file = request.FILES['dataset']
@@ -207,13 +257,21 @@ def home(request):
             df = load_uploaded_dataframe(uploaded_path)
             internal_path = save_internal_dataframe(df)
             request.session['dataset_path'] = internal_path
-            context['message'] = 'Dataset uploaded and converted to internal Parquet format'
+            context['message'] = 'Dataset uploaded successfully.'
         except Exception as e:
             context['error'] = str(e)
             internal_path = None
+            
+        # Ensure chat history is reset on new upload and passed to template
+        request.session['chat_history'] = []
+        context['chat_history'] = []
  
     
     # ---------- Build preview on EVERY request ----------
+    # If no POST action occurred, we still need to pass chat history to a GET request
+    if 'chat_history' not in context:
+        context['chat_history'] = chat_history
+
     if internal_path:
         df = load_internal_dataframe(internal_path)
  
@@ -222,22 +280,21 @@ def home(request):
  
         # 1. Grab the string value to highlight the correct button
         current_view = request.GET.get('view', 'preview')
-        context['preview_mode'] = current_view # <--- THIS keeps the button blue
+        context['preview_mode'] = current_view 
  
         # 2. Slice the dataframe based on the button clicked
-        if current_view == 'all_columns':
-            preview_df = df.head(10)
-        elif current_view == 'all_rows':
-            preview_df = df.iloc[:100, :15]
+        if current_view == 'all_rows':
+            preview_df = df.iloc[:500, :]
         elif current_view == 'full':
-            preview_df = df.head(100)
+            preview_df = df.iloc[:2000, :]
         else:
-            preview_df = df.iloc[:10, :15]
+            preview_df = df.iloc[:50, :]
  
         # 3. Save the HTML table to 'preview', which your template is looking for
-        context['preview'] = preview_df.to_html( # <--- Changed this key to 'preview'
+        context['preview'] = preview_df.to_html( 
             classes='table table-striped table-dark-custom',
-            index=False
+            index=True,
+            justify='left'
         )
  
     return render(request, 'assistant/home.html', context)

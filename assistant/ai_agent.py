@@ -1,204 +1,118 @@
 import json
 import os
-import time
 import hashlib
-from google import genai
-from google.genai import errors as genai_errors
+from openai import OpenAI
 from django.core.cache import cache
 
 from .tool_registry import TOOLS
 
-# Remove module-level client initialization. We will initialize them lazily.
-MODEL = 'gemini-2.5-flash'  
-GROQ_MODEL = 'llama-3.3-70b-versatile'
+CACHE_TTL = 300
 
-MAX_RETRIES = 3
-BASE_DELAY = 1.5  
-CACHE_TTL = 300    
-
+GROQ_MODEL = 'openai/gpt-oss-120b' 
 
 class AIServiceUnavailable(Exception):
-    """Raised when no AI provider (primary or fallback) could serve the request."""
     pass
-
 
 def _cache_key(prefix, *parts):
     raw = prefix + '|' + '|'.join(str(p) for p in parts)
     return 'talkdata:' + hashlib.sha256(raw.encode()).hexdigest()
 
-def parse_tool_calls(response_text):
-    cleaned = response_text.replace('```json', '').replace('```', '').strip()
-    data = json.loads(cleaned)
-    if isinstance(data, dict):
-        return [data]
-    if isinstance(data, list):
-        return data
-    raise ValueError('AI response must be a JSON object or array')
+def _call_groq(prompt, force_json=False, temperature=0.0):
+    api_key = os.getenv('GROQ_API_KEY')
+    if not api_key:
+        raise ValueError("GROQ_API_KEY environment variable is missing. Get a free key at console.groq.com")
+        
+    client = OpenAI(api_key=api_key, base_url='https://api.groq.com/openai/v1')
+    
+    kwargs = {
+        "model": GROQ_MODEL,
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": temperature, # <--- Now dynamically set
+    }
+    
+    if force_json:
+        kwargs["response_format"] = {"type": "json_object"}
 
-
-# --- Lazy Client Initializers ---
-
-def get_gemini_client():
-    return genai.Client(api_key=os.getenv('GEMINI_API_KEY'))
-
-def get_groq_client():
-    groq_api_key = os.getenv('GROQ_API_KEY')
-    if not groq_api_key:
-        return None
-    from openai import OpenAI
-    return OpenAI(api_key=groq_api_key, base_url='https://api.groq.com/openai/v1')
-
-
-# --- Call Functions ---
-
-def _call_gemini_with_retry(prompt):
-    client = get_gemini_client()
-    last_error = None
-
-    for attempt in range(MAX_RETRIES):
-        try:
-            response = client.models.generate_content(model=MODEL, contents=prompt)
-            return response.text
-
-        except genai_errors.APIError as e:
-            last_error = e
-            status = getattr(e, 'code', None) or getattr(e, 'status_code', None)
-            
-            # If it's a rate limit or server error, back off and retry
-            if status not in (429, 500, 502, 503, 504): 
-                if attempt < MAX_RETRIES - 1:
-                    print(f'Gemini retry {attempt + 1}/{MAX_RETRIES} after status {status}')
-                    time.sleep(BASE_DELAY * (2 ** attempt)) 
-                    continue
-                raise
-
-    raise last_error
-
-
-def _call_groq(prompt):
-    client = get_groq_client()
-    if not client:
-        raise ValueError('No fallback provider configured (GROQ_API_KEY not set or loaded)')
-
-    response = client.chat.completions.create(
-        model=GROQ_MODEL,
-        messages=[{'role': 'user', 'content': prompt}],
-    )
-    return response.choices[0].message.content
-
-
-def _call_with_fallback(prompt):
-    """Try Gemini first; if it fails for API reasons, try Groq."""
     try:
-        return _call_gemini_with_retry(prompt)
-
-    except genai_errors.APIError as gemini_error:
-        # We catch ANY Gemini APIError here. If Gemini is down, rate-limited,
-        # or giving 500 errors, we should always try our Groq fallback!
-        try:
-            return _call_groq(prompt)
-            
-        except Exception as groq_error:
-            # If Groq ALSO fails (or wasn't configured properly), raise our custom 
-            # exception so the view can catch it and show the "friendly" busy message.
-            raise AIServiceUnavailable(
-                f'Gemini unavailable ({gemini_error}); Groq fallback also failed ({groq_error})'
-            ) from groq_error
-
-
+        response = client.chat.completions.create(**kwargs)
+        return response.choices[0].message.content
+    except Exception as e:
+        raise AIServiceUnavailable(f"Groq API failed: {str(e)}")
+    
+    
 # --- Public Tools ---
 
 def get_tool_calls(user_message, columns):
-    key = _cache_key('tool_calls', user_message.strip().lower(), columns)
+    # Bumped to v3 to instantly bust the cache
+    key = _cache_key('tool_calls_groq_v3', user_message.strip().lower(), columns)
     cached = cache.get(key)
     if cached is not None:
         return cached
         
-    # Get the exact list of tools you have programmed
     available_tools = list(TOOLS.keys())
 
+    # We added synonym mapping and removed the strict negative constraints
     prompt = f'''
-You are a data transformation assistant.
+You are an intelligent data routing API. Your job is to understand the user's intent, even if they use synonyms.
 
-Available columns:
-{columns}
+Available dataset columns: {columns}
+Allowed tools: {available_tools}
 
-ALLOWED TOOLS: 
-{available_tools}
-You MUST choose a tool ONLY from the list of ALLOWED TOOLS above. Do not invent tool names.
+User request: "{user_message}"
 
-User request:
-{user_message}
+SYNONYM MAPPING:
+- "remove", "delete", "get rid of", "drop" -> MUST map to "drop_column"
+- "rename", "change name" -> MUST map to "rename_column"
 
-If the request requires ONE action, return a single JSON object.
-
-Example: 
-{{"tool": "drop_column", "args": {{"column": "salary"}}}} 
-
-If the request requires MULTIPLE actions, return a JSON array of objects. 
-
-Example: [ 
-{{"tool": "drop_column", "args": {{"column": "salary"}}}},
-{{"tool": "count_nulls", "args": {{}}}} , 
-{{"tool": "max_values", "args": {{}}}}
-] 
-
-Return ONLY valid JSON. No markdown, no explanations.
-
-For chart requests use:
-
+EXAMPLE 1 (Removing data):
 {{
-    "tool": "create_chart", 
-    "args": {{ 
-    "chart_type": "bar|line|scatter|histogram|box", 
-    "x": "column_name",
-    "y": "column_name" 
-    }} 
+  "actions": [
+    {{"tool": "drop_column", "args": {{"column": "salary"}}}}
+  ]
 }}
 
-Examples:
-
-'Create a bar chart of sales by region'
-'Plot revenue vs profit'
-'Show a histogram of age'
-'Create a box plot of salary by department'
+CRITICAL RULES:
+1. Output ONLY a valid JSON object with the key "actions".
+2. The "tool" value MUST exactly match one of the Allowed tools.
+3. Trust the user. Extract the column name they requested exactly as they typed it. DO NOT verify if the column exists or matches uppercase/lowercase (the backend will handle validation).
 '''
-
-
-
-    result = _call_with_fallback(prompt)
-    cache.set(key, result, CACHE_TTL)
-    return result
-
-def explain_results(user_command, analysis_results):
-    key = _cache_key(
-        'explain',
-        user_command.strip().lower(), 
-        str(analysis_results)
-        )
     
+    result = _call_groq(prompt, force_json=True)
+    
+    try:
+        data = json.loads(result)
+        array_only = data.get("actions", [])
+        final_json_string = json.dumps(array_only)
+        cache.set(key, final_json_string, CACHE_TTL)
+        return final_json_string
+    except:
+        return result
+    
+    
+    
+    
+def explain_results(user_command, analysis_results):
+    key = _cache_key('explain_groq_v4', user_command.strip().lower(), str(analysis_results))
     cached = cache.get(key)
     if cached is not None:
         return cached
 
     prompt = f'''
-You are explaining data analysis results to a non-technical user.
+You are a sharp, direct data analyst copilot. 
 
-User request:
-{user_command}
+Summarize the following data analysis results in 1 or 2 concise sentences.
+User request: {user_command}
+Results: {analysis_results}
 
-Results:
-{analysis_results}
-
-Write a clear summary using:
-- a short opening sentence,
-- grouped bullet points,
-- simple column names,
-- one useful insight if appropriate.
-
-Do not show JSON, Python dictionaries, or technical terms like 'null object' or 'dtype'.
-Keep the response under 120 words unless the user asked for detailed analysis.'''
+STRICT GUIDELINES:
+- Jump straight to the findings.
+- NO greetings (e.g., do not say "Hey there", "Here is a snapshot").
+- NO sign-offs or advice (e.g., do not say "You're ready to go!").
+- Keep it under 35 words. Plain text only.
+'''
     
-    result = _call_with_fallback(prompt)
+    # Kept slightly low (0.2) so it's natural but doesn't ramble
+    result = _call_groq(prompt, force_json=False, temperature=0.2) 
+    
     cache.set(key, result, CACHE_TTL)
     return result

@@ -8,54 +8,42 @@ from .tool_registry import tool
 
 #----------------------------Data Transformation Tools----------------------------
 
+import pandas as pd
+import plotly.express as px
+from .tool_registry import tool
+
+#----------------------------Data Transformation Tools----------------------------
 
 def resolve_column(df, name): 
-    mapping = {c.lower(): c for c in df.columns}
+    # Creates a dictionary mapping lowercase names to the actual column names
+    mapping = {str(c).lower().strip(): c for c in df.columns}
     
-    if name.lower() not in mapping:
-        raise ValueError(f'Column {name} not found') 
+    clean_name = str(name).lower().strip()
+    if clean_name not in mapping:
+        raise ValueError(f"Column '{name}' not found. Available columns: {list(df.columns)}") 
     
-    return mapping[name.lower()]
+    return mapping[clean_name]
 
 
 @tool('transform')
 def drop_column(df: pd.DataFrame, column: str) -> pd.DataFrame:
     """Remove a column from the dataframe."""
-
-    if column not in df.columns:
-        raise ValueError(f'Column {column} not found')
-
-    return df.drop(columns=[column])
+    real_column = resolve_column(df, column)
+    return df.drop(columns=[real_column])
 
 
 @tool('transform')
-def rename_column(
-    df: pd.DataFrame,
-    old_name: str,
-    new_name: str
-) -> pd.DataFrame:
+def rename_column(df: pd.DataFrame, old_name: str, new_name: str) -> pd.DataFrame:
     """Rename a dataframe column."""
-
     real_old_name = resolve_column(df, old_name)
-    
-    if real_old_name not in df.columns:
-        raise ValueError(f'Column {old_name} not found')
-
     return df.rename(columns={real_old_name: new_name})
 
 
 @tool('transform')
-def add_column(
-    df: pd.DataFrame,
-    new_column: str,
-    expression: str
-) -> pd.DataFrame:
+def add_column(df: pd.DataFrame, new_column: str, expression: str) -> pd.DataFrame:
     """Create a new column using a pandas expression."""
-
     df[new_column] = df.eval(expression)
-
     return df
-
 
 #----------------------------Analtics Tools----------------------------
 
