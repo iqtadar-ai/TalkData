@@ -1,31 +1,29 @@
 <!DOCTYPE html>
-<!-- Turning on native dark mode fixes the muddy colors instantly -->
 <html lang="en" data-bs-theme="dark"> 
 <head>
     <title>Test Matrix Logger</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Choices.js CSS for modern tag inputs -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/choices.js/public/assets/styles/choices.min.css" />
+    
     <style>
-        /* Sleek, deep background instead of the standard gray */
         body {
             background-color: #0d1117; 
             color: #c9d1d9;
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
         }
-        /* Glassy, modern card style */
         .glass-card {
             background-color: #161b22;
             border: 1px solid #30363d;
             border-radius: 12px;
             box-shadow: 0 8px 24px rgba(0,0,0,0.4);
         }
-        /* Crisper labels */
         .form-label {
             font-weight: 500;
             color: #8b949e;
             font-size: 0.9rem;
             margin-bottom: 0.4rem;
         }
-        /* Subtle input borders */
         .form-control, .form-select {
             background-color: #0d1117;
             border: 1px solid #30363d;
@@ -37,7 +35,6 @@
             box-shadow: 0 0 0 0.25rem rgba(88, 166, 255, 0.25);
             color: #ffffff;
         }
-        /* Modern button */
         .btn-brand {
             background-color: #238636;
             color: white;
@@ -48,20 +45,48 @@
             background-color: #2ea043;
             color: white;
         }
+
+        /* Overrides to make Choices.js match the dark theme */
+        .choices__inner {
+            background-color: #0d1117 !important;
+            border: 1px solid #30363d !important;
+            border-radius: 6px !important;
+            min-height: 38px !important;
+            color: #c9d1d9 !important;
+        }
+        .choices__list--dropdown {
+            background-color: #161b22 !important;
+            border: 1px solid #30363d !important;
+            color: #c9d1d9 !important;
+            z-index: 9999;
+        }
+        .choices__input {
+            background-color: transparent !important;
+            color: #c9d1d9 !important;
+        }
+        .choices__list--multiple .choices__item {
+            background-color: #238636 !important;
+            border: 1px solid #2ea043 !important;
+            border-radius: 4px;
+        }
+        .choices__list--dropdown .choices__item--selectable.is-highlighted {
+            background-color: #30363d !important;
+        }
+        .choices[data-type*="select-multiple"] .choices__button {
+            border-left: 1px solid rgba(255,255,255,0.2) !important;
+        }
     </style>
 </head>
 <body class="p-4 p-md-5">
     <div class="container" style="max-width: 650px;">
         
-        <!-- Header -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <h3 class="fw-bold mb-0 text-white">
                 <span style="color: #58a6ff;">⚡</span> Test Matrix
             </h3>
-            <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">Back to dashboard</a>
+            <a href="{% url 'home' %}" class="btn btn-outline-secondary btn-sm rounded-pill px-3">Back</a>
         </div>
 
-        <!-- Success/Error Alerts -->
         {% if messages %}
             {% for message in messages %}
                 <div class="alert alert-{{ message.tags }} alert-dismissible fade show border-0" style="background-color: #1f6feb20; color: #58a6ff; border-left: 4px solid #58a6ff !important;" role="alert">
@@ -71,7 +96,6 @@
             {% endfor %}
         {% endif %}
 
-        <!-- Form Card -->
         <div class="card glass-card">
             <div class="card-body p-4 p-md-5">
                 <form action="{% url 'test_matrix' %}" method="POST">
@@ -93,10 +117,21 @@
                             <input type="text" name="dataset_name" class="form-control" placeholder="e.g., diabetes.csv" required>
                         </div>
                     </div>
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label">Dataset link</label>
+                            <input type="text" name="dataset_link" class="form-control" placeholder="e.g., https://example.com/dataset.csv">
+                        </div>
 
-                    <div class="mb-4">
-                        <label class="form-label">Dataset Link (Optional)</label>
-                        <input type="url" name="dataset_link" class="form-control" placeholder="https://kaggle.com/...">
+                    <div class="row g-3 mb-4">
+                        <div class="col-md-6">
+                            <label class="form-label">Total Rows</label>
+                            <input type="number" name="dataset_rows" class="form-control" placeholder="e.g., 1500">
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label">Total Columns</label>
+                            <input type="number" name="dataset_columns" class="form-control" placeholder="e.g., 12">
+                        </div>
                     </div>
 
                     <div class="mb-4">
@@ -104,24 +139,28 @@
                         <input type="text" name="prompt" class="form-control" placeholder="What did you type into the copilot?" required>
                     </div>
 
+                    <!-- FULL WIDTH ROW FOR TOOLS -->
+                    <div class="mb-4">
+                        <label class="form-label">Tools Routed (Searchable Tags)</label>
+                        <select id="tools_select" name="tool_routed" class="form-select" multiple required>
+                            <option value="drop_column">drop_column</option>
+                            {% comment %} <option value="rename_column">rename_column</option>
+                            <option value="duplicate_column">duplicate_column</option>
+                            <option value="Hallucinated">None / Hallucinated</option> {% endcomment %}
+                        </select>
+                    </div>
+
+                    <!-- SPLIT ROW FOR RESULT AND TIME -->
                     <div class="row g-3 mb-4">
-                        <div class="col-md-4">
-                            <label class="form-label">Tool Routed</label>
-                            <select name="tool_routed" class="form-select" required>
-                                <option value="drop_column">drop_column</option>
-                                <option value="rename_column">rename_column</option>
-                                <option value="duplicate_column">duplicate_column</option>
-                                <option value="Hallucinated">None / Hallucinated</option>
-                            </select>
-                        </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label">Execution Result</label>
                             <select name="is_success" class="form-select" required>
                                 <option value="True"> Success</option>
                                 <option value="False"> Failed</option>
+                                <option value="Partial"> Partial Success</option>
                             </select>
                         </div>
-                        <div class="col-md-4">
+                        <div class="col-md-6">
                             <label class="form-label">Time (sec)</label>
                             <input type="number" step="0.01" name="execution_time" class="form-control" placeholder="0.00">
                         </div>
@@ -143,13 +182,27 @@
                         <textarea name="notes" class="form-control" rows="2" placeholder="Any weird behavior or observations?"></textarea>
                     </div>
                     
-                    <button type="submit" class="btn btn-brand w-100 py-2 rounded-3">Push to Supabase 🚀</button>
+                    <button type="submit" class="btn btn-brand w-100 py-2 rounded-3">Push to database </button>
                 </form>
             </div>
         </div>
     </div>
     
-    <!-- Bootstrap JS for dismissible alerts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Choices.js Script -->
+    <script src="https://cdn.jsdelivr.net/npm/choices.js/public/assets/scripts/choices.min.js"></script>
+    <script>
+        // Initialize the tag input when the page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            var element = document.getElementById('tools_select');
+            var choices = new Choices(element, {
+                removeItemButton: true,
+                searchEnabled: true,
+                searchPlaceholderValue: "Type to search tools...",
+                placeholderValue: "Click to select tools",
+                shouldSort: false
+            });
+        });
+    </script>
 </body>
 </html>

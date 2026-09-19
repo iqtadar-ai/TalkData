@@ -316,13 +316,17 @@ def test_matrix(request):
             
         try:
             supabase: Client = create_client(url, key)
+            selected_tools = request.POST.getlist('tool_routed')
+            tools_string = ", ".join(selected_tools) if selected_tools else "None"
             
             data = {
                 "tester_name": request.POST.get('tester_name'),
                 "dataset_name": request.POST.get('dataset_name'),
-                "dataset_link": request.POST.get('dataset_link', ''), # New field added here
+                "dataset_link": request.POST.get('dataset_link', ''), 
+                "dataset_rows": int(request.POST.get('dataset_rows') or 0), 
+                "dataset_columns": int(request.POST.get('dataset_columns') or 0),
                 "prompt": request.POST.get('prompt'),
-                "tool_routed": request.POST.get('tool_routed'),
+                "tool_routed": tools_string,  # 3. Pass the joined string here
                 "is_success": request.POST.get('is_success') == 'True',
                 "execution_time": float(request.POST.get('execution_time') or 0.0),
                 "human_rating": int(request.POST.get('rating')),
