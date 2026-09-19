@@ -6,14 +6,15 @@ import pandas as pd
 import json
 import time
 
-
-from django.shortcuts import render
-from django.core.files.storage import FileSystemStorage
-from django.conf import settings
-
 from .ai_agent import get_tool_calls, explain_results, AIServiceUnavailable 
 from . import tools
 from .tool_registry import TOOLS, TOOL_TYPES
+
+from django.core.files.storage import FileSystemStorage
+from django.conf import settings
+from django.contrib import messages
+from django.shortcuts import render, redirect
+from supabase import create_client, Client
 
 # ---------- Load uploaded file into a DataFrame ----------
 
@@ -298,3 +299,42 @@ def home(request):
         )
  
     return render(request, 'assistant/home.html', context)
+
+
+
+
+#------------------------------matric testing----------------------------
+
+def test_matrix(request):
+    if request.method == 'POST':
+        url = os.getenv("SUPABASE_URL")
+        key = os.getenv("SUPABASE_KEY")
+        
+        if not url or not key:
+            messages.error(request, "Supabase credentials missing in .env file.")
+            return redirect('test_matrix')
+            
+        try:
+            supabase: Client = create_client(url, key)
+            
+            data = {
+                "tester_name": request.POST.get('tester_name'),
+                "dataset_name": request.POST.get('dataset_name'),
+                "dataset_link": request.POST.get('dataset_link', ''), # New field added here
+                "prompt": request.POST.get('prompt'),
+                "tool_routed": request.POST.get('tool_routed'),
+                "is_success": request.POST.get('is_success') == 'True',
+                "execution_time": float(request.POST.get('execution_time') or 0.0),
+                "human_rating": int(request.POST.get('rating')),
+                "tester_notes": request.POST.get('notes', '')
+            }
+            
+            supabase.table("test_metrics").insert(data).execute()
+            messages.success(request, "Test logged successfully! Ready for the next one.")
+            
+        except Exception as e:
+            messages.error(request, f"Failed to log test: {str(e)}")
+            
+        return redirect('test_matrix')
+
+    return render(request, 'assistant/matrix.html')
