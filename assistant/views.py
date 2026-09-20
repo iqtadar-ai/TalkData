@@ -9,6 +9,7 @@ import time
 from .ai_agent import get_tool_calls, explain_results, AIServiceUnavailable 
 from . import tools
 from .tool_registry import TOOLS, TOOL_TYPES
+from .utils import generate_diff_stats
 
 from django.core.files.storage import FileSystemStorage
 from django.conf import settings
@@ -57,29 +58,6 @@ def save_internal_dataframe(df):
 
 def load_internal_dataframe(path):
     return pd.read_parquet(path)
-
-
-# ---------- Basic command execution ----------
-
-# def execute_basic_command(df, command):
-#     cmd = command.lower().strip()
-
-#     # remove salary
-#     if cmd.startswith('remove '):
-#         column = cmd.replace('remove ', '').replace(' column', '').strip()
-
-#         column_map = {c.lower(): c for c in df.columns}
-
-#         if column in column_map:
-#             real_column = column_map[column]
-
-#             df = tools.drop_column(df, real_column)
-
-#             return df, f'Removed column: {real_column}'
-
-#         return df, f'Column "{column}" not found'
-
-#     return df, 'Command not recognized'
 
 
 # ---------- Main view ----------
@@ -186,29 +164,15 @@ def home(request):
                         end_time = time.perf_counter()
                         exec_time = round(end_time - start_time, 2)
 
-                        # Build stats if dataset changed
+                       # Build stats if dataset changed
                         if dataset_changed:
                             new_shape = df.shape
                             new_cols = set(df.columns)
                             
-                            rows_diff = old_shape[0] - new_shape[0]
-                            if rows_diff > 0:
-                                stats.append({"label": "Rows removed", "value": rows_diff})
-                            elif rows_diff < 0:
-                                stats.append({"label": "Rows added", "value": abs(rows_diff)})
-                                
-                            added_cols = new_cols - old_cols
-                            if added_cols:
-                                stats.append({"label": "Columns added", "value": ", ".join(added_cols)})
-                                
-                            dropped_cols = old_cols - new_cols
-                            if dropped_cols:
-                                stats.append({"label": "Columns removed", "value": ", ".join(dropped_cols)})
-                                
-                            if not stats:
-                                stats.append({"label": "Action", "value": "Data transformed"})
-                                
-                            ai_text = f"I've updated the dataset based on your instructions."
+                            # Use the new utility function
+                            stats.extend(generate_diff_stats(old_shape, old_cols, new_shape, new_cols))
+                            
+                            ai_text = "I've updated the dataset based on your instructions."
 
                         # Generate LLM explanation if there are analysis cards
                         if analysis_cards:
@@ -247,7 +211,7 @@ def home(request):
             
         context['chat_history'] = chat_history
 
-    # ---------- Handle upload form ----------
+    # ---------- Handle upload dataset ----------
     elif request.method == 'POST' and request.FILES.get('dataset'):
         file = request.FILES['dataset']
         fs = FileSystemStorage(location=settings.MEDIA_ROOT / 'uploads')
@@ -257,7 +221,12 @@ def home(request):
         try:
             df = load_uploaded_dataframe(uploaded_path)
             internal_path = save_internal_dataframe(df)
+            
+            # --- NEW UNDO/REDO TRACKING ---
             request.session['dataset_path'] = internal_path
+            request.session['history'] = [internal_path]
+            request.session['history_index'] = 0
+            
             context['message'] = 'Dataset uploaded successfully.'
         except Exception as e:
             context['error'] = str(e)
@@ -300,8 +269,30 @@ def home(request):
  
     return render(request, 'assistant/home.html', context)
 
+#-------------------------- Undo/Redo Actions --------------------------
+def undo_action(request):
+    history = request.session.get('history', [])
+    current_index = request.session.get('history_index', 0)
+    
+    if current_index > 0:
+        new_index = current_index - 1
+        request.session['history_index'] = new_index
+        request.session['dataset_path'] = history[new_index]
+        request.session.modified = True
+        
+    return redirect('home')
 
-
+def redo_action(request):
+    history = request.session.get('history', [])
+    current_index = request.session.get('history_index', 0)
+    
+    if current_index < len(history) - 1:
+        new_index = current_index + 1
+        request.session['history_index'] = new_index
+        request.session['dataset_path'] = history[new_index]
+        request.session.modified = True
+        
+    return redirect('home')
 
 #------------------------------matric testing----------------------------
 

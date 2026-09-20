@@ -315,17 +315,25 @@
 
     <!-- Actions -->
     <div class="d-flex align-items-center gap-2">
-        <button class="btn-ghost" id="undoBtn" disabled title="Undo transformation">
+        <!-- Undo Button -->
+        <button class="btn-ghost" id="undoBtn" 
+                {% if not can_undo %}disabled{% else %}onclick="window.location.href='{% url 'undo' %}'"{% endif %} 
+                title="Undo transformation">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7v6h6"></path><path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6 2.3L3 13"></path></svg>
         </button>
-        <button class="btn-ghost" id="redoBtn" disabled title="Redo transformation">
+        
+        <!-- Redo Button -->
+        <button class="btn-ghost" id="redoBtn" 
+                {% if not can_redo %}disabled{% else %}onclick="window.location.href='{% url 'redo' %}'"{% endif %} 
+                title="Redo transformation">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 7v6h-6"></path><path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6 2.3l3 2.7"></path></svg>
         </button>
+        
         <button class="btn-ghost" id="resetBtn" disabled title="Matrix">
             <a href="{% url 'test_matrix' %}" target="_blank" class="btn btn-sm btn-outline-secondary">Open Logger</a>
         </button>
         
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"></path><path d="M23 20v-6h-6"></path><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10"></path><path d="M3.51 15A9 9 0 0 0 18.36 18.36L23 14"></path></svg>
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 4v6h6"></path><path d="M23 20v-6h-6"></path><path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10"></path><path d="M3.51 15A9 9 0 0 0 18.36 18.36L23 14"></path></svg>
 
         <form id="uploadForm" action="/" method="post" enctype="multipart/form-data" class="m-0 d-flex gap-2 ms-2">
             {% csrf_token %}
@@ -337,6 +345,7 @@
 
 <!-- MAIN BODY (Canvas on Left, Copilot on Right) -->
 <div class="workspace-body">
+    
 
     <!-- PRIMARY: DATA CANVAS (70%) -->
     <main class="canvas-pane">

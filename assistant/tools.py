@@ -6,13 +6,11 @@ from plotly.io import to_html
 from .tool_registry import tool
 
 
-#----------------------------Data Transformation Tools----------------------------
 
-import pandas as pd
-import plotly.express as px
-from .tool_registry import tool
+
 
 #----------------------------Data Transformation Tools----------------------------
+
 
 def resolve_column(df, name): 
     # Creates a dictionary mapping lowercase names to the actual column names
@@ -25,6 +23,10 @@ def resolve_column(df, name):
     return mapping[clean_name]
 
 
+
+
+
+
 @tool('transform')
 def drop_column(df: pd.DataFrame, column: str) -> pd.DataFrame:
     """Remove a column from the dataframe."""
@@ -33,10 +35,24 @@ def drop_column(df: pd.DataFrame, column: str) -> pd.DataFrame:
 
 
 @tool('transform')
-def rename_column(df: pd.DataFrame, old_name: str, new_name: str) -> pd.DataFrame:
-    """Rename a dataframe column."""
-    real_old_name = resolve_column(df, old_name)
+def rename_column(df: pd.DataFrame, new_name: str, old_name: str = None, column: str = None) -> pd.DataFrame:
+    """
+    Rename a dataframe column.
+    
+    Args:
+        new_name: The new name for the column.
+        old_name: The current name of the column.
+        column: The current name of the column.
+    """
+    # Grab whichever parameter the AI decided to send
+    target_name = old_name or column
+    
+    # Pass it to your resolver
+    real_old_name = resolve_column(df, target_name)
     return df.rename(columns={real_old_name: new_name})
+
+
+
 
 
 @tool('transform')
@@ -44,6 +60,19 @@ def add_column(df: pd.DataFrame, new_column: str, expression: str) -> pd.DataFra
     """Create a new column using a pandas expression."""
     df[new_column] = df.eval(expression)
     return df
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 #----------------------------Analtics Tools----------------------------
 
