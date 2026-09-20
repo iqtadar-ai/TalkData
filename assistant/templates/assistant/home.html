@@ -315,6 +315,7 @@
 
     <!-- Actions -->
     <div class="d-flex align-items-center gap-2">
+
         <!-- Undo Button -->
         <button class="btn-ghost" id="undoBtn" 
                 {% if not can_undo %}disabled{% else %}onclick="window.location.href='{% url 'undo' %}'"{% endif %} 

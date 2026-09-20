@@ -195,7 +195,30 @@ def home(request):
                     ai_text = f"Error during execution: {str(e)}"
 
             if dataset_changed:
-                df.to_parquet(internal_path)
+                # 1. Save as a brand NEW file instead of overwriting
+                new_path = save_internal_dataframe(df)
+                
+                # 2. Get current history state
+                history = request.session.get('history', [internal_path])
+                current_index = request.session.get('history_index', 0)
+                
+                # 3. If the user previously undid steps, chop off the abandoned "future" paths
+                history = history[:current_index + 1]
+                
+                # 4. Add the new state
+                history.append(new_path)
+                
+                # 5. Enforce the 5-step rolling window (6 total states: 1 original + 5 edits)
+                if len(history) > 6:
+                    old_file = history.pop(0)
+                    if os.path.exists(old_file):
+                        os.remove(old_file)
+                    
+                # 6. Update session
+                request.session['history'] = history
+                request.session['history_index'] = len(history) - 1
+                request.session['dataset_path'] = new_path
+                request.session.modified = True
             
             # Add AI response to history
             chat_history.append({
@@ -261,13 +284,24 @@ def home(request):
             preview_df = df.iloc[:50, :]
  
         # 3. Save the HTML table to 'preview', which your template is looking for
+       # (Your existing preview table code is here...)
+        # 3. Save the HTML table to 'preview', which your template is looking for
         context['preview'] = preview_df.to_html( 
             classes='table table-striped table-dark-custom',
             index=True,
             justify='left'
         )
- 
+
+        # --- NEW: Check if Undo/Redo are available ---
+        history = request.session.get('history', [])
+        current_index = request.session.get('history_index', 0)
+        
+        context['can_undo'] = current_index > 0
+        context['can_redo'] = current_index < len(history) - 1
+
     return render(request, 'assistant/home.html', context)
+
+
 
 #-------------------------- Undo/Redo Actions --------------------------
 def undo_action(request):
