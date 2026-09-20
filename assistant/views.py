@@ -191,8 +191,12 @@ def home(request):
 
                 except json.JSONDecodeError:
                     ai_text = "Could not parse the AI response. Please try phrasing it differently."
+                # except Exception as e:
+                #     ai_text = f"Error during execution: {str(e)}"
+                
+                # remove after debugging
                 except Exception as e:
-                    ai_text = f"Error during execution: {str(e)}"
+                      ai_text = f"Error running '{tool_name}' with args {args}: {str(e)}"
 
             if dataset_changed:
                 # 1. Save as a brand NEW file instead of overwriting
@@ -219,6 +223,8 @@ def home(request):
                 request.session['history_index'] = len(history) - 1
                 request.session['dataset_path'] = new_path
                 request.session.modified = True
+                
+                internal_path = new_path
             
             # Add AI response to history
             chat_history.append({
@@ -283,13 +289,29 @@ def home(request):
         else:
             preview_df = df.iloc[:50, :]
  
-        # 3. Save the HTML table to 'preview', which your template is looking for
-       # (Your existing preview table code is here...)
-        # 3. Save the HTML table to 'preview', which your template is looking for
+        # 3. Add data type badges to the headers for the UI
+        preview_df = preview_df.copy()  # Copy so we don't mess up the real dataframe
+        formatted_cols = []
+        
+        for col in preview_df.columns:
+            # Get the raw pandas type and simplify it (e.g., 'int64' -> 'int', 'object' -> 'str')
+            raw_type = str(preview_df[col].dtype)
+            simple_type = raw_type.replace('64', '').replace('[ns]', '')
+            if simple_type == 'object': 
+                simple_type = 'str'
+                
+            # Create a tiny, clean HTML badge to sit next to the column name
+            badge_html = f'<span class="badge bg-secondary text-light ms-1" style="font-size: 0.6rem; padding: 0.2em 0.4em; opacity: 0.8;">{simple_type}</span>'
+            formatted_cols.append(f'{col} {badge_html}')
+            
+        preview_df.columns = formatted_cols
+
+        # 4. Save the HTML table to 'preview'
         context['preview'] = preview_df.to_html( 
             classes='table table-striped table-dark-custom',
             index=True,
-            justify='left'
+            justify='left',
+            escape=False  # <-- CRITICAL: Allows our HTML badges to render instead of printing raw code
         )
 
         # --- NEW: Check if Undo/Redo are available ---

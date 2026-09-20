@@ -7,10 +7,7 @@ from .tool_registry import tool
 
 
 
-
-
-#----------------------------Data Transformation Tools----------------------------
-
+#----------------------------Helper  Functions----------------------------
 
 def resolve_column(df, name): 
     # Creates a dictionary mapping lowercase names to the actual column names
@@ -24,7 +21,7 @@ def resolve_column(df, name):
 
 
 
-
+#----------------------------Data Transformation Tools----------------------------
 
 
 @tool('transform')
@@ -32,6 +29,12 @@ def drop_column(df: pd.DataFrame, column: str) -> pd.DataFrame:
     """Remove a column from the dataframe."""
     real_column = resolve_column(df, column)
     return df.drop(columns=[real_column])
+
+
+
+#===================================================================================================== 
+#                                        Rename Column Tool
+#=====================================================================================================
 
 
 @tool('transform')
@@ -53,7 +56,162 @@ def rename_column(df: pd.DataFrame, new_name: str, old_name: str = None, column:
 
 
 
+#===================================================================================================
+#                                          Change Data type Tool
+#===================================================================================================
 
+
+@tool('transform')
+def change_column_type(df: pd.DataFrame, column: str, new_type: str) -> pd.DataFrame:
+    """
+    Change the data type of a column.
+    
+    Args:
+        column: The exact name of the column to modify.
+        new_type: The target data type. Options: 'numeric', 'datetime', 'string', 'boolean', 'category'.
+    """
+    real_col = resolve_column(df, column)
+    new_type = new_type.lower()
+    
+    try:
+        if new_type in ['numeric', 'int', 'float', 'integer']:
+            df[real_col] = pd.to_numeric(df[real_col], errors='coerce')
+        elif new_type in ['datetime', 'date', 'time']:
+            df[real_col] = pd.to_datetime(df[real_col], errors='coerce')
+        elif new_type in ['string', 'str', 'text']:
+            df[real_col] = df[real_col].astype('string')
+        elif new_type in ['boolean', 'bool']:
+            df[real_col] = df[real_col].astype('bool')
+        elif new_type == 'category':
+            df[real_col] = df[real_col].astype('category')
+        else:
+            raise ValueError(f"Unsupported data type target: {new_type}")
+    except Exception as e:
+        raise ValueError(f"Could not convert column '{real_col}' to {new_type}. Error: {str(e)}")
+        
+    return df
+
+
+
+
+#=========================================================================================================
+#                                          Filter Rows Tool
+#=========================================================================================================
+
+@tool('transform')
+def filter_rows(df: pd.DataFrame, column: str, operator: str, value: str = "") -> pd.DataFrame:
+    """
+    Filter rows based on a mathematical or text condition.
+    Use this tool when the user says: "filter", "only show me", "keep rows", or "where".
+    Do NOT use add_column for filtering.
+    
+    Args:
+        column: The exact name of the column to filter on.
+        operator: Must be one of: '==', '!=', '>', '<', '>=', '<=', 'contains', 'not_contains', 'is_null', 'not_null'.
+        value: The value to compare against (leave empty for is_null/not_null).
+    """
+    real_col = resolve_column(df, column)
+    
+    # 1. Handle missing value filters (no 'value' needed)
+    if operator == 'is_null':
+        return df[df[real_col].isna()]
+    elif operator == 'not_null':
+        return df[df[real_col].notna()]
+        
+    # 2. Handle text search filters
+    if operator == 'contains':
+        return df[df[real_col].astype(str).str.contains(str(value), na=False, case=False)]
+    elif operator == 'not_contains':
+        return df[~df[real_col].astype(str).str.contains(str(value), na=False, case=False)]
+        
+    # 3. Handle math and exact match filters
+    # We try to convert the string value to match the column's data type
+    col_type = df[real_col].dtype
+    try:
+        if pd.api.types.is_numeric_dtype(col_type):
+            val = float(value)
+        elif pd.api.types.is_datetime64_any_dtype(col_type):
+            val = pd.to_datetime(value)
+        else:
+            val = str(value)
+    except ValueError:
+        # If conversion fails, fallback to string comparison
+        val = str(value)
+
+    # Apply the mathematical filters
+    if operator == '==':
+        return df[df[real_col] == val]
+    elif operator == '!=':
+        return df[df[real_col] != val]
+    elif operator == '>':
+        return df[df[real_col] > val]
+    elif operator == '<':
+        return df[df[real_col] < val]
+    elif operator == '>=':
+        return df[df[real_col] >= val]
+    elif operator == '<=':
+        return df[df[real_col] <= val]
+    else:
+        raise ValueError(f"Unsupported operator: {operator}")
+    
+    
+    
+#==========================================================================================================
+#                                        Duplicate Column Tool
+#==========================================================================================================    
+    
+    
+@tool('transform')
+def duplicate_column(df: pd.DataFrame, column: str, new_column_name: str) -> pd.DataFrame:
+    """
+    Duplicate or copy an existing column into a new column.
+    Use this when the user says "duplicate", "copy", or "clone" a column.
+    
+    Args:
+        column: The exact name of the existing column to duplicate.
+        new_column_name: The name for the newly copied column.
+    """
+    real_col = resolve_column(df, column)
+    df[new_column_name] = df[real_col].copy()
+    return df
+
+#==========================================================================================================
+#                                       Move Column Tool
+#==========================================================================================================
+
+
+
+@tool('transform')
+def move_column(df: pd.DataFrame, column: str, target_column: str, position: str) -> pd.DataFrame:
+    """
+    Move a column to a specific position (before or after another column).
+    Use this when the user says "move", "reorder", "place before", or "put after".
+    
+    Args:
+        column: The exact name of the column to move.
+        target_column: The exact name of the reference column to position it relative to.
+        position: Must be exactly "before" or "after".
+    """
+    col_to_move = resolve_column(df, column)
+    ref_col = resolve_column(df, target_column)
+    
+    if position not in ['before', 'after']:
+        raise ValueError("Position must be 'before' or 'after'.")
+        
+    cols = list(df.columns)
+    cols.remove(col_to_move)
+    
+    # Find where to insert it based on the target column
+    ref_idx = cols.index(ref_col)
+    insert_idx = ref_idx if position == 'before' else ref_idx + 1
+    
+    cols.insert(insert_idx, col_to_move)
+    return df[cols]
+
+
+#=========================================================================================================
+#                                        Add Column Tool
+#=========================================================================================================
 
 @tool('transform')
 def add_column(df: pd.DataFrame, new_column: str, expression: str) -> pd.DataFrame:

@@ -1,6 +1,7 @@
 import json
 import os
 import hashlib
+import inspect
 from openai import OpenAI
 from django.core.cache import cache
 
@@ -42,39 +43,63 @@ def _call_groq(prompt, force_json=False, temperature=0.0):
     
 # --- Public Tools ---
 
+
+def generate_tool_schemas():
+    """Dynamically reads all registered tools and builds a prompt schema for the LLM."""
+    schemas = []
+    
+    for tool_name, func in TOOLS.items():
+        # Pass the ENTIRE docstring so the AI can read the parameter rules
+        docstring = inspect.getdoc(func) or "No description provided."
+        
+        # Read the function parameters
+        sig = inspect.signature(func)
+        
+        # Filter out 'df' since the AI doesn't pass the dataframe itself
+        expected_args = [param for param in sig.parameters if param != 'df']
+        
+        # Create a visual representation of what the JSON args should look like
+        args_example = ", ".join([f'"{arg}": "..."' for arg in expected_args])
+        
+        schemas.append(f"Tool: {tool_name}\nDescription:\n{docstring}\nArgs needed: {{{args_example}}}")
+        
+    return "\n\n".join(schemas)
+
+
+
+
 def get_tool_calls(user_message, columns):
-    # Bumped to v3 to instantly bust the cache
-    key = _cache_key('tool_calls_groq_v3', user_message.strip().lower(), columns)
+
+    key = _cache_key('tool_calls_groq_v8', user_message.strip().lower(), columns)
     cached = cache.get(key)
     if cached is not None:
         return cached
-        
-    available_tools = list(TOOLS.keys())
 
-    # We added synonym mapping and removed the strict negative constraints
+    # Autogenerate the manual for the LLM
+    dynamic_tool_manual = generate_tool_schemas()
+
     prompt = f'''
-You are an intelligent data routing API. Your job is to understand the user's intent, even if they use synonyms.
+You are an intelligent data routing API. Your job is to understand the user's intent and map it to the correct tool.
 
 Available dataset columns: {columns}
-Allowed tools: {available_tools}
+
+AVAILABLE TOOLS:
+{dynamic_tool_manual}
 
 User request: "{user_message}"
 
-SYNONYM MAPPING:
-- "remove", "delete", "get rid of", "drop" -> MUST map to "drop_column"
-- "rename", "change name" -> MUST map to "rename_column"
-
-EXAMPLE 1 (Removing data):
-{{
-  "actions": [
-    {{"tool": "drop_column", "args": {{"column": "salary"}}}}
-  ]
-}}
-
 CRITICAL RULES:
 1. Output ONLY a valid JSON object with the key "actions".
-2. The "tool" value MUST exactly match one of the Allowed tools.
-3. Trust the user. Extract the column name they requested exactly as they typed it. DO NOT verify if the column exists or matches uppercase/lowercase (the backend will handle validation).
+2. The "tool" value MUST exactly match one of the Tools listed above.
+3. The "args" object MUST contain EXACTLY the arguments specified in "Args needed" for that tool.
+4. Trust the user. Extract the column name they requested exactly as they typed it. DO NOT verify if the column exists (the backend will handle validation).
+
+EXAMPLE JSON FORMAT:
+{{
+  "actions": [
+    {{"tool": "your_chosen_tool", "args": {{"arg1": "value1", "arg2": "value2"}}}}
+  ]
+}}
 '''
     
     result = _call_groq(prompt, force_json=True)
@@ -86,9 +111,7 @@ CRITICAL RULES:
         cache.set(key, final_json_string, CACHE_TTL)
         return final_json_string
     except:
-        return result
-    
-    
+        return result    
     
     
 def explain_results(user_command, analysis_results):
