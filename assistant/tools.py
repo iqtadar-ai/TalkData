@@ -21,7 +21,23 @@ def resolve_column(df, name):
 
 
 
-#----------------------------Data Transformation Tools----------------------------
+
+
+
+#=====================================================================================================
+
+
+#---------------------------------------Data Transformation Tools----------------------------
+
+#=====================================================================================================
+
+
+
+
+
+#=====================================================================================================
+#                                            Drop Column Tool
+#=====================================================================================================
 
 
 @tool('transform')
@@ -215,9 +231,17 @@ def move_column(df: pd.DataFrame, column: str, target_column: str, position: str
 
 @tool('transform')
 def add_column(df: pd.DataFrame, new_column: str, expression: str) -> pd.DataFrame:
-    """Create a new column using a pandas expression."""
-    df[new_column] = df.eval(expression)
-    return df
+    """
+    Create a new column using a pandas mathematical expression.
+    The expression should use column names directly, e.g., 'Revenue - Cost' or 'Price * 1.2'.
+    """
+    df_copy = df.copy()
+    try:
+        df_copy[new_column] = df_copy.eval(expression)
+        return df_copy
+    except Exception as e:
+        # If the AI hallucinates bad syntax, this safely kicks the error back to your view loop
+        raise ValueError(f"Failed to evaluate expression '{expression}'. Make sure to use exact column names without 'df[]' wrappers. Error: {str(e)}")
 
 
 
@@ -228,12 +252,20 @@ def add_column(df: pd.DataFrame, new_column: str, expression: str) -> pd.DataFra
 
 
 
+#=====================================================================================================
+
+#----------------------------------------Analtics Tools---------------------------------------------
+
+#=====================================================================================================
 
 
 
 
-#----------------------------Analtics Tools----------------------------
 
+
+#===================================================================================================
+#                                        Count Nulls Tool
+#===================================================================================================
 
 @tool('analysis')
 def count_nulls(df: pd.DataFrame) -> dict:
@@ -256,22 +288,69 @@ def count_nulls(df: pd.DataFrame) -> dict:
             'items': items,
             'insight': insight 
             }
-
-@tool('analysis')
-def max_values(df: pd.DataFrame) -> dict:
-    numeric = df.select_dtypes(include='number')
-    items = []
     
-    for col in numeric.columns:
-        items.append({ 'label': col, 'value': float(numeric[col].max()) })
-        
-    return { 
-            'type': 'metric_list',
-            'title': 'Maximum Values', 
-            'items': items, 
-            'insight': None
-            }
+    
+    
+    
+#===================================================================================================
+#                                      Calculate Statistic Tool
+#===================================================================================================
+    
+@tool('analysis')
+def calculate_statistic(df, column_name: str, stat_type: str):
+    """
+    Calculates a specific statistical value for a numeric column.
+    stat_type must be one of: 'mean', 'median', 'mode', 'min', 'max', 'sum', 'std'
+    """
+    if isinstance(column_name, list):
+        return {"type": "stat", "error": "Please request one column at a time."}
 
+    try:
+        actual_col = resolve_column(df, column_name)
+    except ValueError as e:
+        return {"type": "stat", "error": str(e)}
+
+    if not pd.api.types.is_numeric_dtype(df[actual_col]):
+        return {"type": "stat", "error": f"Cannot calculate {stat_type} on non-numeric column '{actual_col}'."}
+
+    try:
+        result = None
+        if stat_type == 'mean':
+            result = df[actual_col].mean()
+        elif stat_type == 'median':
+            result = df[actual_col].median()
+        elif stat_type == 'mode':
+            result = df[actual_col].mode()[0]
+        elif stat_type == 'min':
+            result = df[actual_col].min()
+        elif stat_type == 'max':
+            result = df[actual_col].max()
+        elif stat_type == 'sum':
+            result = df[actual_col].sum()
+        elif stat_type == 'std':
+            result = df[actual_col].std()
+        else:
+            return {"type": "stat", "error": f"'{stat_type}' is not supported."}
+            
+        # Return a dictionary so it appends nicely to analysis_cards
+        return {
+            "type": "stat", 
+            "column": actual_col, 
+            "statistic": stat_type, 
+            "value": round(result, 2)
+        }
+    except Exception as e:
+        return {"type": "stat", "error": str(e)}
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
 #----------------------------Charting Tool----------------------------
 
 @tool(tool_type='analysis') 

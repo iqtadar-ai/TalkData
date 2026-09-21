@@ -112,10 +112,8 @@ EXAMPLE JSON FORMAT:
         return final_json_string
     except:
         return result    
-    
-    
 def explain_results(user_command, analysis_results):
-    key = _cache_key('explain_groq_v4', user_command.strip().lower(), str(analysis_results))
+    key = _cache_key('explain_groq_v6', user_command.strip().lower(), str(analysis_results))
     cached = cache.get(key)
     if cached is not None:
         return cached
@@ -123,18 +121,20 @@ def explain_results(user_command, analysis_results):
     prompt = f'''
 You are a sharp, direct data analyst copilot. 
 
-Summarize the following data analysis results in 1 or 2 concise sentences.
+Present the following data analysis results as a clean, highly readable list.
 User request: {user_command}
 Results: {analysis_results}
 
 STRICT GUIDELINES:
-- Jump straight to the findings.
-- NO greetings (e.g., do not say "Hey there", "Here is a snapshot").
-- NO sign-offs or advice (e.g., do not say "You're ready to go!").
-- Keep it under 35 words. Plain text only.
+- Format as a simple list using standard dashes (-).
+- NO markdown formatting. DO NOT use asterisks (**) for bolding. Just use plain text.
+- Make it read naturally, avoiding repetitive robotic words. 
+- Example success: "- Quantity: 9.55"
+- Example error: "- Country: Cannot calculate mean for text data."
+- Jump straight to the findings. NO introductory sentences.
+- NO greetings and NO sign-offs.
 '''
     
-    # Kept slightly low (0.2) so it's natural but doesn't ramble
     result = _call_groq(prompt, force_json=False, temperature=0.2) 
     
     cache.set(key, result, CACHE_TTL)

@@ -175,6 +175,7 @@ def home(request):
                             ai_text = "I've updated the dataset based on your instructions."
 
                         # Generate LLM explanation if there are analysis cards
+                        # Generate LLM explanation if there are analysis cards
                         if analysis_cards:
                             try:
                                 charts = [c for c in analysis_cards if c.get('type') == 'chart']
@@ -182,7 +183,11 @@ def home(request):
                                 if charts:
                                     ai_text = "I've generated the visualization for you. It's ready in the Visualization tab."
                                 else:
+                                    # This is where the numbers are turned into a sentence
                                     ai_text = explain_results(command, analysis_cards)
+                            except Exception as e:
+                                # Stop silently failing so we can debug!
+                                ai_text = f"Successfully calculated, but failed to generate summary: {str(e)}\nRaw data: {analysis_cards}"
                             except Exception:
                                 pass
 
