@@ -266,9 +266,12 @@ def add_column(df: pd.DataFrame, new_column: str, expression: str) -> pd.DataFra
 #===================================================================================================
 #                                        Count Nulls Tool
 #===================================================================================================
-
 @tool('analysis')
 def count_nulls(df: pd.DataFrame) -> dict:
+    """
+    Count the number of missing, null, NaN, or empty values across the dataset.
+    Use this specifically when the user asks about "missing data", "empty cells", or "null values".
+    """
     nulls = df.isnull().sum()
     items = []
     
@@ -289,8 +292,33 @@ def count_nulls(df: pd.DataFrame) -> dict:
             'insight': insight 
             }
     
+#==================================================================================================
+#                                  count value 
+#==================================================================================================
+
+@tool('analyze')
+def count_values(df: pd.DataFrame, column: str, target_value: str = "") -> pd.DataFrame:
+    """
+    Count the occurrences of specific values or categories in a single column.
+    Use this for "group by", "how many of each", or counting a specific item (e.g., "how many males").
+    CRITICAL: Do NOT use this tool for finding missing or null values (use count_nulls instead).
     
+    Args:
+        column: The exact name of the column.
+        target_value: (Optional) The specific value to count. Leave empty to count all unique values.
+    """
+    real_col = resolve_column(df, column)
     
+    if target_value:
+        # User asked for a specific value (case-insensitive string match)
+        count = (df[real_col].astype(str).str.lower() == str(target_value).lower()).sum()
+        # Return a tiny 1-row dataframe with just that specific count
+        return pd.DataFrame({real_col: [target_value], 'Count': [count]})
+    else:
+        # User asked for all counts
+        counts_df = df[real_col].value_counts().reset_index()
+        counts_df.columns = [real_col, 'Count']
+        return counts_df
     
 #===================================================================================================
 #                                      Calculate Statistic Tool
@@ -343,6 +371,8 @@ def calculate_statistic(df, column_name: str, stat_type: str):
         return {"type": "stat", "error": str(e)}
     
     
+
+
     
     
     
