@@ -17,6 +17,8 @@ from django.contrib import messages
 from django.shortcuts import render, redirect
 from supabase import create_client, Client
 
+from .utils import auto_log_to_supabase
+
 # ---------- Load uploaded file into a DataFrame ----------
 
 def load_uploaded_dataframe(path):
@@ -100,6 +102,10 @@ def home(request):
             dataset_changed = False
             ai_text = "I've processed your request."
             stats = []
+            
+            is_success = False
+            tools_string_clean = "None"
+            notes_string = "Execution bypassed or failed early."
 
             try:
                 start_time = time.perf_counter()
@@ -134,23 +140,34 @@ def home(request):
                         analysis_cards = []
                         context.setdefault('charts', [])
                         
+                        tools_used_clean = []
+                        tools_used_details = []
+                        
                         for call in tool_calls:
-                            # 1. Guardrail: Ensure the call itself is a valid dictionary
                             if not isinstance(call, dict):
                                 raise ValueError("AI hallucinated the JSON structure. Expected a dictionary.")
 
                             tool_name = call.get('tool')
-                            args = call.get('args', {})
+                            args = call.get('args') or {}
 
-                            # 2. Guardrail: Catch if the AI returned a dict/list instead of a string for the tool name
+                            if tool_name:
+                                tools_used_clean.append(tool_name)
+                                
+                                                        
+                                if args:
+                                    arg_str = ", ".join([f"{k}={v}" for k, v in args.items()])
+                                    tools_used_details.append(f"{tool_name}({arg_str})")
+                                else:
+                                    # If no args, just log it as function()
+                                    tools_used_details.append(f"{tool_name}()")
+                                    
+                                    
                             if not isinstance(tool_name, str):
-                                raise ValueError(f"AI schema error: 'tool' must be a text string, but it returned a {type(tool_name).__name__}. Try your prompt again.")
+                                raise ValueError("AI schema error: 'tool' must be a text string.")
 
-                            # 3. Guardrail: The trap for hallucinated tool names
                             if tool_name not in TOOLS:
                                 raise ValueError(f"AI hallucinated an unknown tool: '{tool_name}'")
 
-                            # If it passes all guardrails, execute the tool
                             if tool_name in TOOLS:
                                 tool = TOOLS[tool_name]
                                 result = tool(df, **args)
@@ -160,21 +177,24 @@ def home(request):
                                     dataset_changed = True
                                 else:
                                     analysis_cards.append(result)
-                        # Stop timer
+                        
+                        # ... (your for loop ends here) ...
+                        
+                        is_success = True
+                        tools_string_clean = ", ".join(tools_used_clean)
+                        notes_string = "Args used: " + "; ".join(tools_used_details)
+                        
+                        # ⏱️ 1. CALCULATE TIME HERE SO STATS CAN USE IT
                         end_time = time.perf_counter()
                         exec_time = round(end_time - start_time, 2)
 
-                       # Build stats if dataset changed
+                        # Build stats if dataset changed
                         if dataset_changed:
                             new_shape = df.shape
                             new_cols = set(df.columns)
-                            
-                            # Use the new utility function
                             stats.extend(generate_diff_stats(old_shape, old_cols, new_shape, new_cols))
-                            
                             ai_text = "I've updated the dataset based on your instructions."
 
-                        # Generate LLM explanation if there are analysis cards
                         # Generate LLM explanation if there are analysis cards
                         if analysis_cards:
                             try:
@@ -183,26 +203,66 @@ def home(request):
                                 if charts:
                                     ai_text = "I've generated the visualization for you. It's ready in the Visualization tab."
                                 else:
-                                    # This is where the numbers are turned into a sentence
                                     ai_text = explain_results(command, analysis_cards)
                             except Exception as e:
-                                # Stop silently failing so we can debug!
-                                ai_text = f"Successfully calculated, but failed to generate summary: {str(e)}\nRaw data: {analysis_cards}"
+                                ai_text = f"Successfully calculated, but failed to generate summary: {str(e)}"
                             except Exception:
                                 pass
 
-                        # Always add execution time to stats
+                        # This is now SAFE because exec_time was calculated above
                         stats.append({"label": "Execution time", "value": f"{exec_time} seconds"})
 
                 except json.JSONDecodeError:
                     ai_text = "Could not parse the AI response. Please try phrasing it differently."
-                # except Exception as e:
-                #     ai_text = f"Error during execution: {str(e)}"
-                
-                # remove after debugging
+                    is_success = False
+                    tools_string_clean = "JSON Decode Error"
+                    notes_string = "Failed to parse JSON output."
+                    
                 except Exception as e:
-                      ai_text = f"Error running '{tool_name}' with args {args}: {str(e)}"
-
+                    failed_tool = locals().get('tool_name', 'Unknown')
+                    failed_args = locals().get('args') or {}
+                    
+                    tools_string_clean = failed_tool
+                    
+                    # Safely format the failed tool string
+                    if failed_args:
+                        arg_str = ", ".join([f"{k}={v}" for k, v in failed_args.items()])
+                        notes_string = f"{failed_tool}({arg_str})" 
+                    else:
+                        notes_string = f"{failed_tool}()"
+                    
+                    ai_text = f"Error running '{failed_tool}' with args {failed_args}: {str(e)}"
+                    is_success = False    
+                 
+                # ⏱️ 4. RE-CALCULATE TIME FOR THE LOGGER
+                # If an error skipped the try block, exec_time wouldn't exist out here.
+                # Calculating it again guarantees the logger always has the total time.
+                
+                final_end_time = time.perf_counter()
+                final_exec_time = round(final_end_time - start_time, 2)
+                # 🎯 AUTO-LOGGER 
+                try:
+                    current_dataset = request.session.get('dataset_name', 'Unknown Dataset')
+                    
+                    
+                    final_tools = locals().get('tools_string_clean', 'No Tool (API Failed/Empty)')
+                    final_notes = locals().get('notes_string', 'Execution failed before tool parsing.')
+                    final_status = locals().get('is_success', False)
+                    
+                    
+                    auto_log_to_supabase(
+                        prompt=command, 
+                        df=df, 
+                        tool_name=final_tools, # Will now look like "statistic(stat_type=mean)"
+                        is_success=final_status, 
+                        execution_time=final_exec_time,
+                        dataset_name=current_dataset, # Passing the real name!
+                        notes=final_notes  # Now includes the args used for the tool
+                    )
+                except Exception as log_error:
+                    print(f"Supabase Logger failed silently: {log_error}")
+                    
+                    
             if dataset_changed:
                 # 1. Save as a brand NEW file instead of overwriting
                 new_path = save_internal_dataframe(df)
@@ -260,6 +320,7 @@ def home(request):
             request.session['dataset_path'] = internal_path
             request.session['history'] = [internal_path]
             request.session['history_index'] = 0
+            request.session['dataset_name'] = file.name
             
             context['message'] = 'Dataset uploaded successfully.'
         except Exception as e:
@@ -355,42 +416,3 @@ def redo_action(request):
         
     return redirect('home')
 
-#------------------------------matric testing----------------------------
-
-def test_matrix(request):
-    if request.method == 'POST':
-        url = os.getenv("SUPABASE_URL")
-        key = os.getenv("SUPABASE_KEY")
-        
-        if not url or not key:
-            messages.error(request, "Supabase credentials missing in .env file.")
-            return redirect('test_matrix')
-            
-        try:
-            supabase: Client = create_client(url, key)
-            selected_tools = request.POST.getlist('tool_routed')
-            tools_string = ", ".join(selected_tools) if selected_tools else "None"
-            
-            data = {
-                "tester_name": request.POST.get('tester_name'),
-                "dataset_name": request.POST.get('dataset_name'),
-                "dataset_link": request.POST.get('dataset_link', ''), 
-                "dataset_rows": int(request.POST.get('dataset_rows') or 0), 
-                "dataset_columns": int(request.POST.get('dataset_columns') or 0),
-                "prompt": request.POST.get('prompt'),
-                "tool_routed": tools_string,  # 3. Pass the joined string here
-                "is_success": request.POST.get('is_success') == 'True',
-                "execution_time": float(request.POST.get('execution_time') or 0.0),
-                "human_rating": int(request.POST.get('rating')),
-                "tester_notes": request.POST.get('notes', '')
-            }
-            
-            supabase.table("test_metrics").insert(data).execute()
-            messages.success(request, "Test logged successfully! Ready for the next one.")
-            
-        except Exception as e:
-            messages.error(request, f"Failed to log test: {str(e)}")
-            
-        return redirect('test_matrix')
-
-    return render(request, 'assistant/matrix.html')

@@ -229,27 +229,6 @@ def move_column(df: pd.DataFrame, column: str, target_column: str, position: str
 #                                        Add Column Tool
 #=========================================================================================================
 
-@tool('transform')
-def add_column(df: pd.DataFrame, new_column: str, expression: str) -> pd.DataFrame:
-    """
-    Create a new column using a pandas mathematical expression.
-    The expression should use column names directly, e.g., 'Revenue - Cost' or 'Price * 1.2'.
-    """
-    df_copy = df.copy()
-    try:
-        df_copy[new_column] = df_copy.eval(expression)
-        return df_copy
-    except Exception as e:
-        # If the AI hallucinates bad syntax, this safely kicks the error back to your view loop
-        raise ValueError(f"Failed to evaluate expression '{expression}'. Make sure to use exact column names without 'df[]' wrappers. Error: {str(e)}")
-
-
-
-
-
-
-
-
 
 
 #=====================================================================================================
@@ -319,6 +298,7 @@ def count_values(df: pd.DataFrame, column: str, target_value: str = "") -> pd.Da
         counts_df = df[real_col].value_counts().reset_index()
         counts_df.columns = [real_col, 'Count']
         return counts_df
+    
     
 #===================================================================================================
 #                                      Calculate Statistic Tool
