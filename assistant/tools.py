@@ -229,9 +229,6 @@ def move_column(df: pd.DataFrame, column: str, target_column: str, position: str
 #                                        Add Column Tool
 #=========================================================================================================
 
-<<<<<<< HEAD
-=======
-
 @tool('transform')
 def add_column(df: pd.DataFrame, new_column: str, expression: str) -> pd.DataFrame:
     """
@@ -280,8 +277,6 @@ def map_column(df: pd.DataFrame, new_column: str, source_column: str, mapping: d
 
 
 
-
->>>>>>> main
 
 
 #=====================================================================================================
