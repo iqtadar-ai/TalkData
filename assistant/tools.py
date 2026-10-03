@@ -229,6 +229,59 @@ def move_column(df: pd.DataFrame, column: str, target_column: str, position: str
 #                                        Add Column Tool
 #=========================================================================================================
 
+<<<<<<< HEAD
+=======
+
+@tool('transform')
+def add_column(df: pd.DataFrame, new_column: str, expression: str) -> pd.DataFrame:
+    """
+    Create a new column using a pandas mathematical expression.
+    The expression should use column names directly, e.g., 'Revenue - Cost' or 'Price * 1.2'.
+    """
+    df_copy = df.copy()
+        
+        # 🎯 NEW: Automatically fix the AI's bad formatting
+        # Sort columns by length (longest first) so we don't accidentally replace partial words
+    for col in sorted(df_copy.columns, key=len, reverse=True):
+            # If the column name isn't just plain letters/numbers (meaning it has spaces or math symbols)
+            if not col.isalnum(): 
+                # If the AI used the column name but forgot the backticks, we add them!
+                if col in expression and f"`{col}`" not in expression:
+                    expression = expression.replace(col, f"`{col}`")
+                    
+    try:
+            df_copy[new_column] = df_copy.eval(expression)
+            return df_copy
+    except Exception as e:
+            raise ValueError(
+                f"Failed to evaluate '{expression}'. "
+                f"Original error: {str(e)}"
+            ) 
+            
+               
+@tool('transform')
+def map_column(df: pd.DataFrame, new_column: str, source_column: str, mapping: dict) -> pd.DataFrame:
+    """
+    Create a new column by mapping existing categorical text to new values (like numbers).
+    The mapping should be a dictionary, e.g., {'male': 1, 'female': 0}.
+    """
+    df_copy = df.copy()
+    if source_column not in df_copy.columns:
+        raise ValueError(f"Cannot map values: Column '{source_column}' does not exist in the dataset.")
+        
+    try:
+        df_copy[new_column] = df_copy[source_column].replace(mapping)
+        return df_copy
+    except Exception as e:
+        raise ValueError(f"Failed to map values for column '{source_column}'. Error: {str(e)}")
+
+
+
+
+
+
+
+>>>>>>> main
 
 
 #=====================================================================================================
